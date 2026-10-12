@@ -1,5 +1,5 @@
 import { mediaPathsIn, type Bookmark } from '@margin/shared';
-import { API_BASE } from './api.ts';
+import { API_BASE } from './config.ts';
 import { db } from './db.ts';
 
 const CONCURRENCY = 4;

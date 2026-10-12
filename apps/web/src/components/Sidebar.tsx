@@ -10,7 +10,7 @@ const SYNC_LABELS = {
   syncing: 'Syncing',
   offline: 'Offline, changes will sync later',
   error: 'Can’t reach the server',
-  unauthorized: 'Server needs an access token',
+  unauthorized: 'Signed out',
 } as const;
 
 export function Sidebar() {

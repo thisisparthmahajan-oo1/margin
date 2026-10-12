@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useState } from 'react';
+import { signOut } from '../data/auth.ts';
 import { db } from '../data/db.ts';
 import { appSettings, useAppSettings } from '../data/settings.ts';
 import { syncNow, useSyncStatus } from '../data/sync.ts';
@@ -7,7 +7,6 @@ import { syncNow, useSyncStatus } from '../data/sync.ts';
 export function SettingsPage() {
   const settings = useAppSettings();
   const sync = useSyncStatus();
-  const [token, setToken] = useState(settings.apiToken);
   const stats = useLiveQuery(async () => ({
     articles: await db.bookmarks.where('status').equals('ready').count(),
     unsynced: await db.outbox.count(),
@@ -45,21 +44,22 @@ export function SettingsPage() {
       </div>
 
       <div className="setting">
-        <h2>Access token</h2>
-        <p className="muted">The token the server was started with (APP_TOKEN). The Android app has it built in.</p>
-        <form
-          className="token-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            appSettings.set({ apiToken: token.trim() });
-            void syncNow();
-          }}
-        >
-          <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Token" />
-          <button className="button" type="submit">
-            Save token
+        <h2>Sign-in</h2>
+        {settings.sessionExpiresAt ? (
+          <p>
+            Signed in on this device until{' '}
+            {new Date(settings.sessionExpiresAt).toLocaleDateString(undefined, { dateStyle: 'long' })}. After that you’ll be
+            asked for your access token again.
+          </p>
+        ) : (
+          <p className="muted">This server doesn’t require an access token.</p>
+        )}
+        {settings.sessionExpiresAt && (
+          <button className="button" onClick={signOut}>
+            Sign out
           </button>
-        </form>
+        )}
+        <p className="muted">Signing out keeps your saved articles on this device.</p>
       </div>
     </section>
   );

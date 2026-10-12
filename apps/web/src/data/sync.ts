@@ -150,7 +150,15 @@ async function scheduleNext() {
   timer = setTimeout(() => void syncNow(), hasPending ? 2_000 : 60_000);
 }
 
+let started = false;
+
+/** Starts background syncing. Safe to call more than once (e.g. after signing in again). */
 export function startSync() {
+  if (started) {
+    void syncNow();
+    return;
+  }
+  started = true;
   // Catch up on images for articles synced before they could be downloaded (e.g. while offline).
   void syncNow().then(async () => downloadMissingMedia(await db.bookmarks.toArray()));
   const kick = () => void syncNow();

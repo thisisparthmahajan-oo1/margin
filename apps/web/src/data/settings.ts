@@ -28,15 +28,18 @@ export const readerSettings = createLocalStore<ReaderSettings>('margin.reader', 
 });
 
 export interface AppSettings {
-  /** Bearer token, only needed when the server runs with APP_TOKEN. */
-  apiToken: string;
+  /** This device's sign-in session (see data/auth.ts); empty when signed out or the server is open. */
+  session: string;
+  /** When the session stops working (epoch ms); the app asks for the token again after this. */
+  sessionExpiresAt: number | null;
   /** Archive an article automatically when you reach the end (Instapaper option). */
   autoArchive: boolean;
   sort: SortKey;
 }
 
 export const appSettings = createLocalStore<AppSettings>('margin.app', {
-  apiToken: '',
+  session: '',
+  sessionExpiresAt: null,
   autoArchive: false,
   sort: 'newest',
 });

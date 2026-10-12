@@ -17,7 +17,7 @@ npm run dev          # API on :8787, web app on :5173 (open http://localhost:517
 |---------------|-----------------------------|------------------------------------------------------------------|
 | `MONGODB_URI` | `mongodb://127.0.0.1:27017` | MongoDB (Atlas in production)                                    |
 | `DB_NAME`     | `margin`                    | Database name                                                    |
-| `APP_TOKEN`   | unset                       | API token. **Required in production.** The web app asks for it under Settings |
+| `APP_TOKEN`   | unset                       | Access token. **Required in production.** Apps ask for it on first open and stay signed in for 30 days |
 | `PORT`        | `8787`                      | Local server port                                                |
 
 ## Deploy (Vercel + MongoDB Atlas)
@@ -40,10 +40,10 @@ Article downloads keep running after the response via `waitUntil`. Downloads tha
 
 ## Android app
 
-The Android app is the web app wrapped with [Capacitor](https://capacitorjs.com). The server URL and token are built into the APK.
+The Android app is the web app wrapped with [Capacitor](https://capacitorjs.com). The server URL is built into the APK; the access token is not (the app asks for it on first open).
 
 ```sh
-MARGIN_API_URL=https://<project>.vercel.app MARGIN_APP_TOKEN=<APP_TOKEN> npm run android:build
+MARGIN_API_URL=https://marginr.vercel.app npm run android:build
 # → apps/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -73,6 +73,7 @@ For local testing against the dev server, build with `MARGIN_API_URL=http://10.0
 - **Listen:** text-to-speech with adjustable speed.
 - **Keyboard (web):** `j`/`k` to move, `Enter` to open, `a` to archive, `l` to like, `/` to search, `n` to add a link, `Esc` to go back.
 - **Offline-first:** every change is saved on the device first and synced when you're back online.
+- **Sign-in:** each device asks for the access token once, then stays signed in for 30 days (also offline). Changing `APP_TOKEN` on the server signs every device out.
 
 ### X Articles
 

@@ -1,11 +1,11 @@
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
-import { bearerAuth } from 'hono/bearer-auth';
 import { except } from 'hono/combine';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { SessionResponse, SignInRequest } from '@margin/shared';
 import type { AppEnv, Deps } from './deps.ts';
 import { bookmarkRoutes } from './routes/bookmarks.ts';
 import { folderRoutes } from './routes/folders.ts';
@@ -13,9 +13,13 @@ import { highlightRoutes } from './routes/highlights.ts';
 import { mediaRoutes } from './routes/media.ts';
 import { searchRoutes } from './routes/search.ts';
 import { syncRoutes } from './routes/sync.ts';
+import { createSession, isValidSession, safeEqual } from './session.ts';
 
-/** Reachable without the token: health checks, and images (unguessable content-hash names, loaded by <img>). */
-const PUBLIC_API = ['/api/health', '/api/media/*'];
+/**
+ * Reachable without credentials: health checks, images (unguessable content-hash names, loaded by
+ * <img>), and signing in. Everything else needs `Authorization: Bearer <session or APP_TOKEN>`.
+ */
+const PUBLIC_API = ['/api/health', '/api/media/*', '/api/session/signin'];
 
 export interface AppOptions {
   /** Resolves the connected dependencies; called per request, expected to cache. */
@@ -31,9 +35,30 @@ export function createApp(opts: AppOptions) {
   // Native apps and the browser extension call the API cross-origin.
   app.use('/api/*', cors());
 
-  if (opts.appToken) app.use('/api/*', except(PUBLIC_API, bearerAuth({ token: opts.appToken })));
+  const appToken = opts.appToken;
+  if (appToken) {
+    app.use(
+      '/api/*',
+      except(PUBLIC_API, async (c, next) => {
+        const bearer = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1] ?? '';
+        // Devices send a session; scripts and tools may send APP_TOKEN itself.
+        if (isValidSession(appToken, bearer) || safeEqual(bearer, appToken)) return next();
+        return c.json({ error: 'Sign in again' }, 401);
+      }),
+    );
+  }
 
   app.get('/api/health', (c) => c.json({ ok: true }));
+
+  // Sign in: trade APP_TOKEN for a device session valid for 30 days. No DB access.
+  app.post('/api/session/signin', async (c) => {
+    if (!appToken) return c.json<SessionResponse>({ session: null, expiresAt: null });
+    const { token } = await c.req.json<SignInRequest>().catch(() => ({ token: '' }));
+    if (!token || !safeEqual(token.trim(), appToken)) return c.json({ error: 'That token doesn’t match the server' }, 401);
+    return c.json<SessionResponse>(createSession(appToken));
+  });
+  // Behind auth: 200 means the current credentials are still accepted.
+  app.get('/api/session', (c) => c.json({ ok: true }));
 
   app.use('/api/*', async (c, next) => {
     c.set('deps', await opts.deps());

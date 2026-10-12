@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.ts';
 import { createMediaStore } from '../src/media.ts';
+import { SESSION_TTL_MS } from '../src/session.ts';
 import { createStore } from '../src/store.ts';
 import { useTestDb } from './mongo.ts';
 
@@ -23,6 +24,28 @@ describe('api', () => {
     expect((await a.request('/api/sync')).status).toBe(401);
     expect((await a.request('/api/sync', { headers: { authorization: 'Bearer secret' } })).status).toBe(200);
     expect((await a.request('/api/media/missing.png')).status).toBe(404);
+  });
+
+  it('signs in with APP_TOKEN and accepts the 30-day session it returns', async () => {
+    const a = app('secret');
+    const post = (token: string) =>
+      a.request('/api/session/signin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) });
+    expect((await post('wrong')).status).toBe(401);
+    const res = await post('secret');
+    expect(res.status).toBe(200);
+    const { session, expiresAt } = await res.json();
+    expect(expiresAt - Date.now()).toBeGreaterThan(SESSION_TTL_MS - 60_000);
+    const check = (bearer: string) => a.request('/api/session', { headers: { authorization: `Bearer ${bearer}` } });
+    expect((await check(session)).status).toBe(200);
+    expect((await a.request('/api/session')).status).toBe(401);
+    // Changing APP_TOKEN signs every device out.
+    expect((await app('rotated').request('/api/session', { headers: { authorization: `Bearer ${session}` } })).status).toBe(401);
+  });
+
+  it('an open server (no APP_TOKEN) needs no sign-in', async () => {
+    const res = await app(null).request('/api/session/signin', { method: 'POST', body: '{}' });
+    expect(await res.json()).toEqual({ session: null, expiresAt: null });
+    expect((await app(null).request('/api/session')).status).toBe(200);
   });
 
   it('saves a URL and queues it for download', async () => {

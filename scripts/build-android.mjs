@@ -1,6 +1,7 @@
-// Builds the Android debug APK with the server URL and token baked in.
+// Builds the Android debug APK pointed at a Margin server. The APK holds no secret: like the web
+// app, it asks for the access token on first open and stays signed in for 30 days.
 //
-//   MARGIN_API_URL=https://margin.example.vercel.app MARGIN_APP_TOKEN=... npm run android:build
+//   MARGIN_API_URL=https://marginr.vercel.app npm run android:build
 //
 // Needs JDK 21 (JAVA_HOME, or ~/.jdks/jdk-21*) and the Android SDK (apps/android/local.properties).
 import { execSync } from 'node:child_process';
@@ -14,12 +15,10 @@ const web = path.join(root, 'apps/web');
 const android = path.join(root, 'apps/android');
 
 const apiUrl = process.env.MARGIN_API_URL?.replace(/\/+$/, '');
-const token = process.env.MARGIN_APP_TOKEN ?? '';
 if (!apiUrl || !/^https?:\/\//.test(apiUrl)) {
   console.error('Set MARGIN_API_URL to the server address, e.g. https://margin.vercel.app');
   process.exit(1);
 }
-if (!token) console.warn('MARGIN_APP_TOKEN is empty: the app will only work with a server that has no APP_TOKEN.');
 if (apiUrl.startsWith('http:')) console.warn('Plain http server: only debug builds are allowed to use it.');
 
 function findJava21() {
@@ -43,7 +42,7 @@ function findJava21() {
 
 const run = (cmd, cwd, env = {}) => execSync(cmd, { cwd, stdio: 'inherit', env: { ...process.env, ...env } });
 
-run('npx vite build --outDir dist-android', web, { VITE_API_URL: apiUrl, VITE_APP_TOKEN: token });
+run('npx vite build --outDir dist-android', web, { VITE_API_URL: apiUrl });
 run('npx cap sync android', web, { MARGIN_API_URL: apiUrl });
 run('./gradlew assembleDebug', android, { JAVA_HOME: findJava21() });
 

@@ -21,7 +21,9 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
+import { TokenGate } from './components/TokenGate.tsx';
 import { saveUrl } from './data/actions.ts';
+import { initAuth, onSignedIn } from './data/auth.ts';
 import { startSync } from './data/sync.ts';
 import { toast } from './data/toast.ts';
 import { initBackButton, initShareTarget, isNative } from './platform/native.ts';
@@ -52,16 +54,25 @@ const router = createBrowserRouter([
 
 // The native app ships its files inside the APK; only the PWA needs a service worker.
 if (!isNative) registerSW({ immediate: true });
-startSync();
 initBackButton();
-initShareTarget(async (text) => {
-  const id = await saveUrl(text);
-  toast(id ? 'Saved to Home' : 'No link found in what was shared');
-  void router.navigate('/');
+void initAuth();
+// Nothing talks to the server until this device is signed in. Shared links wait (Android retains them).
+let shareTargetReady = false;
+onSignedIn(() => {
+  startSync();
+  if (shareTargetReady) return;
+  shareTargetReady = true;
+  initShareTarget(async (text) => {
+    const id = await saveUrl(text);
+    toast(id ? 'Saved to Home' : 'No link found in what was shared');
+    void router.navigate('/');
+  });
 });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <TokenGate>
+      <RouterProvider router={router} />
+    </TokenGate>
   </StrictMode>,
 );

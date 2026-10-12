@@ -1180,3 +1180,57 @@ a.row-link:hover .row-title {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- sign-in ---------- */
+
+.token-gate {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+}
+.token-card {
+  width: min(400px, 100%);
+  display: grid;
+  gap: 14px;
+}
+.token-card .wordmark {
+  justify-self: start;
+  margin-bottom: 18px;
+}
+.token-card h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.token-help {
+  margin: 0 0 6px;
+  color: var(--ink-2);
+}
+.token-field {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.token-field:focus-within {
+  border-color: var(--margin);
+}
+.token-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  font-size: 15px;
+}
+.token-field input:focus {
+  outline: none;
+}
+.token-submit {
+  height: 44px;
+  justify-content: center;
+}

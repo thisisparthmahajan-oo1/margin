@@ -161,6 +161,17 @@ export interface SearchResponse {
   hits: SearchHit[];
 }
 
+export interface SignInRequest {
+  /** The server's APP_TOKEN. */
+  token: string;
+}
+
+/** A device session. Both null when the server has no APP_TOKEN (open server, e.g. local dev). */
+export interface SessionResponse {
+  session: string | null;
+  expiresAt: number | null;
+}
+
 export interface ApiError {
   error: string;
 }
