@@ -10,7 +10,7 @@ const app = (appToken: string | null) =>
   createApp({
     appToken,
     deps: async () => ({
-      store: createStore(ctx.c),
+      store: createStore(ctx.c, createMediaStore(ctx.db)),
       media: createMediaStore(ctx.db),
       ingestor: { enqueue: (id: string) => void enqueued.push(id) },
     }),

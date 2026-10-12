@@ -28,6 +28,12 @@ export function createMediaStore(db: Db) {
       return MEDIA_PREFIX + filename;
     },
 
+    /** Deletes a stored image by its public path. Missing files are ignored. */
+    async remove(path: string): Promise<void> {
+      const filename = path.slice(MEDIA_PREFIX.length);
+      for (const file of await bucket.find({ filename }).toArray()) await bucket.delete(file._id);
+    },
+
     async open(filename: string) {
       const file = await bucket.find({ filename }).limit(1).next();
       if (!file) return null;

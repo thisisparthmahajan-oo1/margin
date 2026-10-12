@@ -1,10 +1,11 @@
 import { isInList, type Bookmark } from '@margin/shared';
 import { describe, expect, it } from 'vitest';
+import { createMediaStore } from '../src/media.ts';
 import { createStore, snippet, SYNC_OVERLAP_MS } from '../src/store.ts';
 import { useTestDb } from './mongo.ts';
 
 const ctx = useTestDb();
-const store = () => createStore(ctx.c);
+const store = () => createStore(ctx.c, createMediaStore(ctx.db));
 const save = async (url: string) => (await store().saveBookmark({ url, canonicalUrl: url, source: 'web' })).bookmark;
 const content = (title: string, text: string) => ({
   title, byline: null, siteName: 'Site', excerpt: null, leadImage: null,

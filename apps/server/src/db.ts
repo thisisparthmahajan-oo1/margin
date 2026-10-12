@@ -1,11 +1,20 @@
-import type { Bookmark, Deletion, Folder, Highlight } from '@margin/shared';
+import { mediaPathsIn, type Bookmark, type Deletion, type Folder, type Highlight } from '@margin/shared';
 import { MongoClient, type Collection, type Db } from 'mongodb';
 
-/** Stored shapes: the shared domain types keyed by `_id`, plus server-only fields. */
-export type BookmarkDoc = Omit<Bookmark, 'id'> & { _id: string; plainText: string | null };
+// Stored shapes: the shared domain types keyed by `_id`, plus server-only fields.
+
+/** Server-only bookmark fields, never sent to clients. */
+export interface BookmarkServerFields {
+  /** Search text. */
+  plainText: string | null;
+  /** Stored images this article uses; an image is deleted once no bookmark lists it. */
+  mediaPaths: string[];
+}
+export type BookmarkDoc = Omit<Bookmark, 'id'> & { _id: string } & BookmarkServerFields;
 export type FolderDoc = Omit<Folder, 'id'> & { _id: string };
 export type HighlightDoc = Omit<Highlight, 'id'> & { _id: string };
-export type DeletionDoc = Deletion & { _id: string };
+/** `expiresAt` drives a TTL index: deletion records only need to live long enough for devices to sync them. */
+export type DeletionDoc = Deletion & { _id: string; expiresAt: Date };
 
 export interface Collections {
   db: Db;
@@ -30,6 +39,7 @@ export async function ensureIndexes(c: Collections) {
     c.bookmarks.createIndex({ canonicalUrl: 1 }, { unique: true }),
     c.bookmarks.createIndex({ updatedAt: 1 }),
     c.bookmarks.createIndex({ status: 1, updatedAt: 1 }),
+    c.bookmarks.createIndex({ mediaPaths: 1 }),
     c.bookmarks.createIndex(
       { title: 'text', siteName: 'text', plainText: 'text' },
       { name: 'bookmarks_text', weights: { title: 10, siteName: 3, plainText: 1 }, default_language: 'english' },
@@ -38,7 +48,16 @@ export async function ensureIndexes(c: Collections) {
     c.highlights.createIndex({ updatedAt: 1 }),
     c.highlights.createIndex({ bookmarkId: 1 }),
     c.deletions.createIndex({ deletedAt: 1 }),
+    c.deletions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ]);
+}
+
+/** Data fixes for documents written before a field existed. Idempotent; cheap once done. */
+export async function backfill(c: Collections) {
+  const missing = c.bookmarks.find({ mediaPaths: { $exists: false } }, { projection: { contentHtml: 1, leadImage: 1 } });
+  for await (const doc of missing) {
+    await c.bookmarks.updateOne({ _id: doc._id }, { $set: { mediaPaths: mediaPathsIn(doc.contentHtml, doc.leadImage) } });
+  }
 }
 
 /**
@@ -52,6 +71,7 @@ export function connect(uri: string, dbName: string): Promise<Collections> {
     const client = await new MongoClient(uri).connect();
     const c = collections(client.db(dbName));
     await ensureIndexes(c);
+    await backfill(c);
     return c;
   })().catch((e) => {
     connecting = null; // let the next request retry

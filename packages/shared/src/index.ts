@@ -91,6 +91,14 @@ export const sortComparators: Record<SortKey, (a: Bookmark, b: Bookmark) => numb
   longest: (a, b) => b.wordCount - a.wordCount || b.savedAt - a.savedAt,
 };
 
+/** Server paths of stored article images, e.g. `/api/media/<hash>.png`. */
+export const MEDIA_PATH_PATTERN = /\/api\/media\/[\w.-]+/g;
+
+/** Every stored image an article uses (body + thumbnail). Drives image cleanup on server and devices. */
+export function mediaPathsIn(contentHtml: string | null, leadImage: string | null): string[] {
+  return [...new Set([...(contentHtml?.match(MEDIA_PATH_PATTERN) ?? []), ...(leadImage?.match(MEDIA_PATH_PATTERN) ?? [])])];
+}
+
 export const WORDS_PER_MINUTE = 230;
 export const readingMinutes = (wordCount: number) => Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
 
@@ -132,6 +140,11 @@ export interface UpdateHighlightRequest {
 export interface SyncResponse {
   /** Pass back as `since` on the next sync. */
   cursor: number;
+  /**
+   * The client's cursor is older than the server keeps deletion records for, so deletions may have
+   * been missed. This response is a full snapshot: replace the local library with it.
+   */
+  reset: boolean;
   bookmarks: Bookmark[];
   folders: Folder[];
   highlights: Highlight[];

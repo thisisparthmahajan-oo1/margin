@@ -1,16 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  Bookmark,
-  BookmarkSource,
-  EntityName,
-  Folder,
-  Highlight,
-  SearchHit,
-  SyncResponse,
-  TextQuoteAnchor,
-  UpdateBookmarkRequest,
+import {
+  mediaPathsIn,
+  type Bookmark,
+  type BookmarkSource,
+  type EntityName,
+  type Folder,
+  type Highlight,
+  type SearchHit,
+  type SyncResponse,
+  type TextQuoteAnchor,
+  type UpdateBookmarkRequest,
 } from '@margin/shared';
 import type { BookmarkDoc, Collections, FolderDoc, HighlightDoc } from './db.ts';
+import type { MediaStore } from './media.ts';
 
 /**
  * Serverless instances don't share a clock, so a write stamped slightly "in the past" could land
@@ -19,10 +21,17 @@ import type { BookmarkDoc, Collections, FolderDoc, HighlightDoc } from './db.ts'
  */
 export const SYNC_OVERLAP_MS = 10_000;
 const STALE_PENDING_MS = 2 * 60_000;
+/**
+ * Deletion records are kept this long so every device can learn about a delete; after that they
+ * expire (TTL index). A device whose last sync is older gets a full snapshot instead (`reset`).
+ */
+export const DELETION_RETENTION_MS = 90 * 24 * 60 * 60_000;
 
 const now = () => Date.now();
 
-const toBookmark = ({ _id, plainText: _, ...rest }: BookmarkDoc): Bookmark => ({ id: _id, ...rest });
+const toBookmark = ({ _id, plainText: _text, mediaPaths: _media, ...rest }: BookmarkDoc): Bookmark => ({ id: _id, ...rest });
+/** Keeps server-only fields out of query results sent to clients. */
+const CLIENT_PROJECTION = { plainText: 0, mediaPaths: 0 } as const;
 const toFolder = ({ _id, ...rest }: FolderDoc): Folder => ({ id: _id, ...rest });
 const toHighlight = ({ _id, ...rest }: HighlightDoc): Highlight => ({ id: _id, ...rest });
 
@@ -38,13 +47,23 @@ export interface ExtractedContent {
   publishedAt: number | null;
 }
 
-export function createStore(c: Collections) {
-  const recordDeletion = (entity: EntityName, id: string) =>
-    c.deletions.replaceOne(
+export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>) {
+  const recordDeletion = (entity: EntityName, id: string) => {
+    const t = now();
+    return c.deletions.replaceOne(
       { _id: `${entity}:${id}` },
-      { entity, id, deletedAt: now() },
+      { entity, id, deletedAt: t, expiresAt: new Date(t + DELETION_RETENTION_MS) },
       { upsert: true },
     );
+  };
+
+  /** Deletes each image no remaining bookmark uses (images are shared between articles by content hash). */
+  const releaseMedia = async (paths: string[]) => {
+    for (const path of paths) {
+      const stillUsed = await c.bookmarks.findOne({ mediaPaths: path }, { projection: { _id: 1 } });
+      if (!stillUsed) await media.remove(path);
+    }
+  };
 
   const getBookmark = async (id: string) => {
     const doc = await c.bookmarks.findOne({ _id: id });
@@ -91,6 +110,7 @@ export function createStore(c: Collections) {
         leadImage: null,
         contentHtml: null,
         plainText: null,
+        mediaPaths: [],
         wordCount: 0,
         publishedAt: null,
         folderId: null,
@@ -113,8 +133,15 @@ export function createStore(c: Collections) {
       await c.bookmarks.updateOne({ _id: id }, { $set: { status: 'failed', error, updatedAt: now() } });
     },
 
+    /** Stores extracted content. On a re-download, images the old version used and the new one doesn't are released. */
     async markReady(id: string, content: ExtractedContent) {
-      await c.bookmarks.updateOne({ _id: id }, { $set: { ...content, status: 'ready', error: null, updatedAt: now() } });
+      const mediaPaths = mediaPathsIn(content.contentHtml, content.leadImage);
+      const previous = await c.bookmarks.findOneAndUpdate(
+        { _id: id },
+        { $set: { ...content, mediaPaths, status: 'ready', error: null, updatedAt: now() } },
+        { projection: { mediaPaths: 1 } },
+      );
+      await releaseMedia((previous?.mediaPaths ?? []).filter((p) => !mediaPaths.includes(p)));
     },
 
     /** Bookmarks whose background fetch was lost (e.g. a serverless instance was frozen). */
@@ -141,12 +168,14 @@ export function createStore(c: Collections) {
       return doc ? toBookmark(doc) : null;
     },
 
+    /** Hard delete: the article, its highlights, and any images no other article uses. */
     async deleteBookmark(id: string): Promise<boolean> {
-      const { deletedCount } = await c.bookmarks.deleteOne({ _id: id });
-      if (!deletedCount) return false;
+      const deleted = await c.bookmarks.findOneAndDelete({ _id: id }, { projection: { mediaPaths: 1 } });
+      if (!deleted) return false;
       const highlights = await c.highlights.find({ bookmarkId: id }, { projection: { _id: 1 } }).toArray();
       await c.highlights.deleteMany({ bookmarkId: id });
       await Promise.all([...highlights.map((h) => recordDeletion('highlight', h._id)), recordDeletion('bookmark', id)]);
+      await releaseMedia(deleted.mediaPaths ?? []);
       return true;
     },
 
@@ -210,18 +239,24 @@ export function createStore(c: Collections) {
       return deletedCount > 0;
     },
 
-    /** Everything changed after `since`. The returned cursor lags by SYNC_OVERLAP_MS (see above). */
-    async changesSince(since: number): Promise<SyncResponse> {
-      const cursor = now() - SYNC_OVERLAP_MS;
+    /**
+     * Everything changed after `since`. The returned cursor lags by SYNC_OVERLAP_MS (see above).
+     * A cursor older than DELETION_RETENTION_MS gets a full snapshot with `reset: true`.
+     */
+    async changesSince(requestedSince: number): Promise<SyncResponse> {
+      const t = now();
+      const reset = requestedSince > 0 && requestedSince < t - DELETION_RETENTION_MS;
+      const since = reset ? 0 : requestedSince;
       const changed = { updatedAt: { $gt: since } };
       const [bookmarks, folders, highlights, deletions] = await Promise.all([
-        c.bookmarks.find(changed, { projection: { plainText: 0 } }).toArray(),
+        c.bookmarks.find(changed, { projection: CLIENT_PROJECTION }).toArray(),
         c.folders.find(changed).toArray(),
         c.highlights.find(changed).toArray(),
-        c.deletions.find({ deletedAt: { $gt: since } }).toArray(),
+        reset ? [] : c.deletions.find({ deletedAt: { $gt: since } }).toArray(),
       ]);
       return {
-        cursor: Math.max(cursor, since),
+        cursor: Math.max(t - SYNC_OVERLAP_MS, since),
+        reset,
         bookmarks: bookmarks.map((d) => toBookmark(d as BookmarkDoc)),
         folders: folders.map(toFolder),
         highlights: highlights.map(toHighlight),

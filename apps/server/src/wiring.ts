@@ -8,7 +8,7 @@ import { createStore } from './store.ts';
 /** The one place the server's pieces are assembled; entrypoints differ only in how background work runs. */
 export async function buildDeps(defer: Defer): Promise<Deps> {
   const collections = await connect(config.mongoUri, config.dbName);
-  const store = createStore(collections);
   const media = createMediaStore(collections.db);
+  const store = createStore(collections, media);
   return { store, media, ingestor: createIngestor(store, media, defer) };
 }
