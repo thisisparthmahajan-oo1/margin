@@ -1,0 +1,14 @@
+{
+  "name": "@margin/capacitor-clipboard-link",
+  "version": "0.1.0",
+  "private": true,
+  "description": "iOS: offer to save a link the user copied (stand-in for a share extension, which needs the paid Apple program).",
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  }
+}

@@ -42,7 +42,7 @@ function findJava21() {
 
 const run = (cmd, cwd, env = {}) => execSync(cmd, { cwd, stdio: 'inherit', env: { ...process.env, ...env } });
 
-run('npx vite build --outDir dist-android', web, { VITE_API_URL: apiUrl });
+run('npx vite build --outDir dist-native', web, { VITE_API_URL: apiUrl });
 run('npx cap sync android', web, { MARGIN_API_URL: apiUrl });
 run('./gradlew assembleDebug', android, { JAVA_HOME: findJava21() });
 

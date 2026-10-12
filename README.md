@@ -63,6 +63,22 @@ What the Android app adds:
 
 For local testing against the dev server, build with `MARGIN_API_URL=http://10.0.2.2:8787` (Android emulator → your Mac) or `http://<mac-lan-ip>:8787` (phone on the same Wi-Fi). Plain `http` is allowed in debug builds only.
 
+## iOS app
+
+Same Capacitor wrapper as Android (`apps/ios`). It's signed with your **free Apple ID team** (`T9275P7FTT`, the same team as the fitness app), using automatic signing.
+
+```sh
+MARGIN_API_URL=https://marginr.vercel.app npm run ios:sim      # build + run in the iPhone simulator
+MARGIN_API_URL=https://marginr.vercel.app npm run ios:device   # build + install on your iPhone
+```
+
+- **Device install:** connect the iPhone by cable (or the same Wi-Fi once paired) and unlock it. If the phone says *Untrusted Developer*, trust the team once: *Settings → General → VPN & Device Management*. Pick a specific phone with `MARGIN_IOS_DEVICE="Parth Phone"`.
+- **Free Apple ID limits:**
+  - The app stops opening after **7 days**. Re-run `npm run ios:device` to renew it; your library and sign-in stay.
+  - No TestFlight.
+  - No share-sheet extension. Instead, when you open Margin after copying a link, it offers **"Save the link you copied?"**. This uses `packages/capacitor-clipboard-link`. iOS asks "Allow Paste" only when you tap Save.
+- **Paid Apple Developer Program ($99/yr):** switch `DEVELOPMENT_TEAM` in `apps/ios/App/App.xcodeproj` to the paid team. That adds TestFlight, 90-day builds, and the option of a real share extension.
+
 ## Features
 
 - **Save:** paste a link, or share it to the app. Saving a link you already have moves it back to the top of Home.
@@ -86,7 +102,9 @@ packages/shared/   Types shared by every client: Bookmark, Folder, Highlight, AP
 apps/server/       Hono API on MongoDB. Fetch → extract → sanitize → store images in GridFS → $text index
 apps/web/          React PWA. Dexie (IndexedDB) mirror + outbox + on-device image cache
 apps/android/      Capacitor Android project (+ ShareIntentPlugin for the share sheet)
-scripts/           build-vercel.mjs, build-android.mjs
+apps/ios/          Capacitor iOS project (Swift Package Manager)
+packages/capacitor-clipboard-link/   iOS plugin: offer to save a copied link
+scripts/           build-vercel.mjs, build-android.mjs, build-ios.mjs
 ```
 
 - **Server wiring** (`apps/server/src/wiring.ts`) is shared by both entrypoints: `index.ts` for local Node and `vercel.ts` for serverless. The only difference is how background downloads are kept alive (`Defer`).

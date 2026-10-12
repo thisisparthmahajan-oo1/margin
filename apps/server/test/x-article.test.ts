@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { extractorFor } from '../src/extractors/index.ts';
 import { fromFxStatus, parseXPostId, type FxStatusResponse } from '../src/extractors/x-article.ts';
 import fixture from './fixtures/fx-article.json' with { type: 'json' };
+import realFixture from './fixtures/fx-article-real.json' with { type: 'json' };
 
 describe('X URL matching', () => {
   it.each([
@@ -53,5 +54,23 @@ describe('FxTwitter article -> HTML', () => {
 
   it('rejects unavailable posts', () => {
     expect(() => fromFxStatus({ code: 404, message: 'NOT_FOUND' })).toThrow(/unavailable/);
+  });
+});
+
+describe('real X Article (trimmed FxTwitter response, x.com/DeRonin_/status/2033587293064204349)', () => {
+  const real = fromFxStatus(realFixture as unknown as FxStatusResponse);
+
+  it('keeps the title, author and cover', () => {
+    expect(real.title).toBe('How to become an AI Engineer in 6 months (RESOURCES)');
+    expect(real.byline).toMatch(/@DeRonin_\)$/);
+    expect(real.leadImage).toMatch(/^https:\/\/pbs\.twimg\.com\//);
+  });
+
+  it('renders LINK entities as links, DIVIDER as <hr>, and keeps emoji as text', () => {
+    expect(real.html).toMatch(/<a href="https:\/\/[^"]+">[^<]+<\/a>/);
+    expect(real.html).toContain('<hr>');
+    expect(real.html).toContain('⬇️');
+    expect(real.html).toMatch(/<h2>[^<]+<\/h2>/);
+    expect(real.html).toMatch(/<ul><li>/);
   });
 });

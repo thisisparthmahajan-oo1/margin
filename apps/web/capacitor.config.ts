@@ -6,8 +6,13 @@ const apiUrl = process.env.MARGIN_API_URL ?? '';
 const config: CapacitorConfig = {
   appId: 'com.parthmahajan.margin',
   appName: 'Margin',
-  // Separate from the PWA build: this one has the server URL and token baked in.
-  webDir: 'dist-android',
+  // Shared by Android and iOS; separate from the PWA build because the server URL is baked in.
+  webDir: 'dist-native',
+  ios: {
+    path: '../ios',
+    // Full-screen web view; the CSS adds the notch/home-indicator space itself (env(safe-area-inset-*)).
+    contentInset: 'never',
+  },
   android: {
     path: '../android',
     // The app itself is served from https://localhost; a plain-http dev server needs mixed content.

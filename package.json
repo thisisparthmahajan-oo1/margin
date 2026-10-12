@@ -14,6 +14,8 @@
     "build": "npm -w @margin/web run build",
     "build:vercel": "node scripts/build-vercel.mjs",
     "android:build": "node scripts/build-android.mjs",
+    "ios:sim": "node scripts/build-ios.mjs sim",
+    "ios:device": "node scripts/build-ios.mjs device",
     "start": "npm -w @margin/server run start",
     "test": "npm -w @margin/server run test && npm -w @margin/web run test",
     "typecheck": "npm -w @margin/server run typecheck && npm -w @margin/web run typecheck"

@@ -1,0 +1,565 @@
+{
+ "code": 200,
+ "message": "OK",
+ "tweet": {
+  "id": "2033587293064204349",
+  "url": "https://x.com/DeRonin_/status/2033587293064204349",
+  "text": "",
+  "created_timestamp": 1773679967,
+  "author": {
+   "name": "Ronin",
+   "screen_name": "DeRonin_"
+  },
+  "article": {
+   "id": "2033454728298770432",
+   "title": "How to become an AI Engineer in 6 months (RESOURCES)",
+   "preview_text": "AI engineering has quickly become one of the most valuable skill sets in tech\nThe problem is that most beginners have no clear idea what they should actually study\nSome start with machine learning",
+   "created_at": "2026-03-16T16:52:47.000Z",
+   "cover_media": {
+    "id": "QXBpTWVkaWE6DAAFCgABHDitxBAWYAAKAAIToufBaJcgBQAA",
+    "media_id": "2033566289352876032",
+    "media_info": {
+     "__typename": "ApiImage",
+     "color_info": {
+      "palette": [
+       {
+        "percentage": 44.79,
+        "rgb": {
+         "blue": 59,
+         "green": 55,
+         "red": 52
+        }
+       },
+       {
+        "percentage": 21.84,
+        "rgb": {
+         "blue": 171,
+         "green": 182,
+         "red": 164
+        }
+       },
+       {
+        "percentage": 5.16,
+        "rgb": {
+         "blue": 60,
+         "green": 55,
+         "red": 116
+        }
+       },
+       {
+        "percentage": 3.94,
+        "rgb": {
+         "blue": 81,
+         "green": 140,
+         "red": 217
+        }
+       },
+       {
+        "percentage": 2.94,
+        "rgb": {
+         "blue": 163,
+         "green": 204,
+         "red": 214
+        }
+       }
+      ]
+     },
+     "original_img_height": 688,
+     "original_img_url": "https://pbs.twimg.com/media/HDitxBAWYAAiy-O.jpg",
+     "original_img_width": 1720
+    },
+    "media_key": "3_2033566289352876032"
+   },
+   "media_entities": [],
+   "content": {
+    "blocks": [
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "8i2ip",
+      "text": "AI engineering has quickly become one of the most valuable skill sets in tech",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "35te5",
+      "text": "The problem is that most beginners have no clear idea what they should actually study",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "74c49",
+      "text": "Some start with machine learning theory",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "4o2ei",
+      "text": "Some get stuck endlessly watching tutorials",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "dhmmj",
+      "text": "Others jump straight into prompts and agents without understanding APIs, backend basics, or how real products are actually built",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "5r47q",
+      "text": "The result is usually the same: a lot of confusion and very little practical skill",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "ejc64",
+      "text": "build end-to-end applications with LLMs",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "fh7um",
+      "text": "work with model APIs such as OpenAI and Anthropic",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "e5mr6",
+      "text": "properly design prompts and context",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "2bt9c",
+      "text": "use structured outputs and tool calling",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "f7414",
+      "text": "add retrieval when needed",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "6scds",
+      "text": "deploy projects so people can actually use them",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [
+       {
+        "key": 0,
+        "length": 2,
+        "offset": 36
+       }
+      ],
+      "inlineStyleRanges": [
+       {
+        "length": 36,
+        "offset": 0,
+        "style": "Bold"
+       }
+      ],
+      "key": "34d83",
+      "text": "Now let's start reading the article ⬇️",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "6afne",
+      "text": "What an AI Engineer actually does",
+      "type": "header-two"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "7db95",
+      "text": "connecting to LLM APIs",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "emdqf",
+      "text": "designing prompts and context flows",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "30crq",
+      "text": "building chat, search, or automation systems",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "de13b",
+      "text": "integrating tools, databases, and external APIs",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "156l",
+      "text": "handling structured outputs",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "94h65",
+      "text": "improving reliability, cost, and latency",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "er88s",
+      "text": "deploying AI features into real applications",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "6d5i8",
+      "text": "software engineering",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "74rcv",
+      "text": "product engineering",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "52aqv",
+      "text": "automation",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "1p6m2",
+      "text": "applied AI",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [
+       {
+        "key": 1,
+        "length": 1,
+        "offset": 0
+       },
+       {
+        "key": 2,
+        "length": 1,
+        "offset": 73
+       }
+      ],
+      "inlineStyleRanges": [],
+      "key": "6hrpl",
+      "text": "⏩------------------------------------------------------------------------⏪",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "bmkmm",
+      "text": "Month 1: Get solid enough in coding and the fundamentals",
+      "type": "header-two"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "9c9s2",
+      "text": "What to learn",
+      "type": "header-one"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "364p5",
+      "text": "1. Python",
+      "type": "header-two"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "2s69g",
+      "text": "Variables, data types, loops, conditionals, functions",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "d978j",
+      "text": "Lists, dictionaries, sets, tuples",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "5vsbs",
+      "text": "File I/O and working with JSON",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "d8ilg",
+      "text": "Classes and basic OOP (just enough to understand what you're reading)",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "8743h",
+      "text": "Error handling with try/except",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "1al4k",
+      "text": "Virtual environments (venv) and pip",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "cfdca",
+      "text": "Package management – understanding requirements.txt",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "3i863",
+      "text": "2. Git and GitHub",
+      "type": "header-two"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "6sr35",
+      "text": "git init, add, commit, push, pull",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "c93jg",
+      "text": "Branching and merging",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [],
+      "inlineStyleRanges": [],
+      "key": "c73p3",
+      "text": "Understanding .gitignore",
+      "type": "unordered-list-item"
+     },
+     {
+      "data": {},
+      "entityRanges": [
+       {
+        "key": 3,
+        "length": 10,
+        "offset": 74
+       }
+      ],
+      "inlineStyleRanges": [
+       {
+        "length": 17,
+        "offset": 0,
+        "style": "Bold"
+       }
+      ],
+      "key": "c5no1",
+      "text": "Practice project: Write a Python script that calls a free public API (try Open-Meteo for weather data – no API key needed) and formats the result as a clean JSON output",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [
+       {
+        "key": 10,
+        "length": 29,
+        "offset": 3
+       }
+      ],
+      "inlineStyleRanges": [
+       {
+        "length": 33,
+        "offset": 0,
+        "style": "Bold"
+       }
+      ],
+      "key": "8ipo8",
+      "text": "2. Promptfoo (open source, free) ",
+      "type": "unstyled"
+     },
+     {
+      "data": {},
+      "entityRanges": [
+       {
+        "key": 15,
+        "length": 1,
+        "offset": 0
+       }
+      ],
+      "inlineStyleRanges": [],
+      "key": "5ti0c",
+      "text": " ",
+      "type": "atomic"
+     },
+     {
+      "data": {},
+      "entityRanges": [
+       {
+        "key": 16,
+        "length": 1,
+        "offset": 0
+       }
+      ],
+      "inlineStyleRanges": [],
+      "key": "b2i6s",
+      "text": " ",
+      "type": "atomic"
+     }
+    ],
+    "entityMap": [
+     {
+      "key": "15",
+      "value": {
+       "data": {
+        "entityKey": "81e0c328-4f8a-4705-aaa0-7234c6e73e13"
+       },
+       "mutability": "Immutable",
+       "type": "DIVIDER"
+      }
+     },
+     {
+      "key": "16",
+      "value": {
+       "data": {
+        "entityKey": "00ed3dbe-5ddf-4e61-b2f1-f5c433506444"
+       },
+       "mutability": "Immutable",
+       "type": "DIVIDER"
+      }
+     },
+     {
+      "key": "10",
+      "value": {
+       "data": {
+        "entityKey": "7fc6452a-abce-43f5-a898-935cc49e92ef",
+        "url": "https://github.com/promptfoo/promptfoo"
+       },
+       "mutability": "Mutable",
+       "type": "LINK"
+      }
+     },
+     {
+      "key": "1",
+      "value": {
+       "data": {
+        "url": "https://abs-0.twimg.com/emoji/v2/svg/23e9.svg"
+       },
+       "mutability": "Immutable",
+       "type": "TWEMOJI"
+      }
+     },
+     {
+      "key": "0",
+      "value": {
+       "data": {
+        "url": "https://abs-0.twimg.com/emoji/v2/svg/2b07.svg"
+       },
+       "mutability": "Immutable",
+       "type": "TWEMOJI"
+      }
+     },
+     {
+      "key": "2",
+      "value": {
+       "data": {
+        "url": "https://abs-0.twimg.com/emoji/v2/svg/23ea.svg"
+       },
+       "mutability": "Immutable",
+       "type": "TWEMOJI"
+      }
+     },
+     {
+      "key": "3",
+      "value": {
+       "data": {
+        "entityKey": "aa6262b2-e950-4806-8666-017dcae57f76",
+        "url": "https://open-meteo.com/"
+       },
+       "mutability": "Mutable",
+       "type": "LINK"
+      }
+     }
+    ]
+   }
+  }
+ }
+}

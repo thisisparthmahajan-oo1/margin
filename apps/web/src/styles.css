@@ -1100,6 +1100,8 @@ a.row-link:hover .row-title {
 @media (max-width: 820px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
+    /* Top bar keeps its own height; the page below takes the rest (short lists would otherwise stretch the bar). */
+    grid-template-rows: auto 1fr;
   }
   .topbar {
     position: sticky;
@@ -1124,6 +1126,7 @@ a.row-link:hover .row-title {
   }
   .sidebar {
     position: absolute;
+    z-index: 1; /* above the scrim */
     top: 0;
     bottom: 0;
     left: 0;
@@ -1233,4 +1236,13 @@ a.row-link:hover .row-title {
 .token-submit {
   height: 44px;
   justify-content: center;
+}
+
+/* iOS zooms the page into any focused field with text under 16px; keep fields at 16px on touch screens. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }

@@ -11,11 +11,11 @@ let nextId = 1;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-export function toast(message: string, action?: Toast['action']) {
+export function toast(message: string, action?: Toast['action'], durationMs = 4000) {
   const t = { id: nextId++, message, action };
   toasts = [...toasts.slice(-2), t];
   emit();
-  setTimeout(() => dismiss(t.id), 4000);
+  setTimeout(() => dismiss(t.id), durationMs);
 }
 
 export function dismiss(id: number) {

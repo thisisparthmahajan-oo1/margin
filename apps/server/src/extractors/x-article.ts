@@ -28,6 +28,10 @@ type FxEntity =
   | { key: string; value: { type: 'MEDIA'; data: { mediaItems: { mediaId: string }[] } } }
   | { key: string; value: { type: 'MARKDOWN'; data: { markdown: string } } }
   | { key: string; value: { type: 'TWEET'; data: { tweetId: string } } }
+  | { key: string; value: { type: 'LINK'; data: { url: string } } }
+  | { key: string; value: { type: 'DIVIDER'; data: unknown } }
+  // Emoji drawn as images on x.com; the emoji character is already in the block text, which also works offline.
+  | { key: string; value: { type: 'TWEMOJI'; data: { url: string } } }
   | { key: string; value: { type: string; data: unknown } };
 
 interface FxMedia {
@@ -163,12 +167,12 @@ export function renderArticle(article: FxArticle): string {
   for (const block of article.content.blocks) {
     const list = LIST_TAGS[block.type];
     if (list) {
-      parts.push({ list, html: `<li>${renderInline(block)}</li>` });
+      parts.push({ list, html: `<li>${renderInline(block, entities)}</li>` });
     } else if (block.type === 'atomic') {
       parts.push(...block.entityRanges.map((r) => ({ list: null, html: renderEntity(entities.get(r.key), media) })));
     } else if (block.text.trim()) {
       const tag = BLOCK_TAGS[block.type] ?? 'p';
-      parts.push({ list: null, html: `<${tag}>${renderInline(block)}</${tag}>` });
+      parts.push({ list: null, html: `<${tag}>${renderInline(block, entities)}</${tag}>` });
     }
   }
 
@@ -201,6 +205,8 @@ function renderEntity(entity: FxEntity | undefined, media: Map<string, FxMedia>)
         ? `<pre><code${fence[1]?.trim() ? ` class="language-${escapeAttr(fence[1].trim())}"` : ''}>${escapeHtml(fence[2] ?? '')}</code></pre>`
         : `<pre>${escapeHtml(markdown)}</pre>`;
     }
+    case 'DIVIDER':
+      return '<hr>';
     case 'TWEET': {
       const tweetId = (value.data as { tweetId: string }).tweetId;
       const href = `https://x.com/i/status/${tweetId}`;
@@ -233,11 +239,19 @@ function renderMedia(m: FxMedia): string {
 
 interface InlineLink { from: number; to: number; href: string }
 
-function inlineLinks(block: FxBlock): InlineLink[] {
+function inlineLinks(block: FxBlock, entities: Map<number, FxEntity>): InlineLink[] {
   const d = block.data;
+  // Links the author added in the editor are LINK entities over a text range.
+  const entityLinks = block.entityRanges.flatMap((r) => {
+    const e = entities.get(r.key);
+    return e?.value.type === 'LINK'
+      ? [{ from: r.offset, to: r.offset + r.length, href: (e.value.data as { url: string }).url }]
+      : [];
+  });
   const spans = (list: FxSpan[] | undefined, href: (s: FxSpan) => string) =>
     (Array.isArray(list) ? list : []).map((s) => ({ from: s.fromIndex, to: s.toIndex, href: href(s) }));
   return [
+    ...entityLinks,
     ...spans(d.urls, (s) => (/^https?:\/\//i.test(s.text) ? s.text : `https://${s.text}`)),
     ...spans(d.mentions, (s) => `https://x.com/${s.text}`),
     ...spans(d.hashtags, (s) => `https://x.com/hashtag/${s.text}`),
@@ -246,9 +260,9 @@ function inlineLinks(block: FxBlock): InlineLink[] {
 }
 
 /** Splits text at every style/link boundary and wraps each run in the tags active over it. */
-function renderInline(block: FxBlock): string {
+function renderInline(block: FxBlock, entities: Map<number, FxEntity>): string {
   const { text } = block;
-  const links = inlineLinks(block);
+  const links = inlineLinks(block, entities);
   const cuts = new Set([0, text.length]);
   for (const r of block.inlineStyleRanges) cuts.add(r.offset).add(r.offset + r.length);
   for (const l of links) cuts.add(l.from).add(l.to);
