@@ -1,0 +1,45 @@
+{
+  "code": 200,
+  "message": "OK",
+  "tweet": {
+    "id": "1900000000000000001",
+    "url": "https://x.com/writer/status/1900000000000000001",
+    "text": "https://x.com/i/article/1899999999999999999",
+    "created_timestamp": 1741000000,
+    "author": { "name": "A Writer", "screen_name": "writer" },
+    "article": {
+      "id": "1899999999999999999",
+      "title": "On Writing Long Posts",
+      "preview_text": "Why long-form matters.",
+      "created_at": "2025-03-03T10:00:00.000Z",
+      "cover_media": {
+        "id": "m0", "media_key": "3_100", "media_id": "100",
+        "media_info": { "__typename": "ApiImage", "original_img_url": "https://pbs.twimg.com/media/cover.jpg", "original_img_width": 1200, "original_img_height": 600 }
+      },
+      "content": {
+        "blocks": [
+          { "key": "a", "type": "unstyled", "text": "Hello bold and italic world.", "data": {}, "entityRanges": [],
+            "inlineStyleRanges": [{ "offset": 6, "length": 4, "style": "Bold" }, { "offset": 15, "length": 6, "style": "Italic" }] },
+          { "key": "b", "type": "header-one", "text": "A heading", "data": {}, "entityRanges": [], "inlineStyleRanges": [] },
+          { "key": "c", "type": "unordered-list-item", "text": "first", "data": {}, "entityRanges": [], "inlineStyleRanges": [] },
+          { "key": "d", "type": "unordered-list-item", "text": "second", "data": {}, "entityRanges": [], "inlineStyleRanges": [] },
+          { "key": "e", "type": "atomic", "text": " ", "data": {}, "entityRanges": [{ "key": 0, "offset": 0, "length": 1 }], "inlineStyleRanges": [] },
+          { "key": "f", "type": "unstyled", "text": "See example.com and @jack <script>", "entityRanges": [], "inlineStyleRanges": [],
+            "data": { "urls": [{ "fromIndex": 4, "toIndex": 15, "text": "example.com" }], "mentions": [{ "fromIndex": 20, "toIndex": 25, "text": "jack" }] } },
+          { "key": "g", "type": "atomic", "text": " ", "data": {}, "entityRanges": [{ "key": 1, "offset": 0, "length": 1 }], "inlineStyleRanges": [] },
+          { "key": "h", "type": "atomic", "text": " ", "data": {}, "entityRanges": [{ "key": 2, "offset": 0, "length": 1 }], "inlineStyleRanges": [] },
+          { "key": "i", "type": "unstyled", "text": "", "data": {}, "entityRanges": [], "inlineStyleRanges": [] }
+        ],
+        "entityMap": [
+          { "key": "0", "value": { "type": "MEDIA", "mutability": "Immutable", "data": { "entityKey": "x", "mediaItems": [{ "localMediaId": "l", "mediaCategory": "DraftTweetImage", "mediaId": "200" }] } } },
+          { "key": "1", "value": { "type": "MARKDOWN", "mutability": "Mutable", "data": { "entityKey": "y", "markdown": "```ts\nconst a = 1 < 2;\n```" } } },
+          { "key": "2", "value": { "type": "TWEET", "mutability": "Immutable", "data": { "tweetId": "123" } } }
+        ]
+      },
+      "media_entities": [
+        { "id": "m1", "media_key": "3_200", "media_id": "200",
+          "media_info": { "__typename": "ApiImage", "original_img_url": "https://pbs.twimg.com/media/inline.jpg", "original_img_width": 800, "original_img_height": 400 } }
+      ]
+    }
+  }
+}

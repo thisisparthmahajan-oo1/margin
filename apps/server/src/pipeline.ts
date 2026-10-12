@@ -1,0 +1,156 @@
+import sanitizeHtml from 'sanitize-html';
+import type { ExtractedArticle } from './extractors/index.ts';
+import { parseFragment } from './html.ts';
+import { httpGet } from './http.ts';
+import { MEDIA_PREFIX, type MediaStore } from './media.ts';
+import type { ExtractedContent } from './store.ts';
+
+const MAX_IMAGES = 80;
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const IMAGE_CONCURRENCY = 6;
+
+const EXT_BY_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+  'image/svg+xml': 'svg',
+};
+
+const SANITIZE: sanitizeHtml.IOptions = {
+  allowedTags: [
+    'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code', 'kbd', 'samp',
+    'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'a', 'strong', 'b', 'em', 'i', 'u', 's', 'del', 'ins', 'mark',
+    'sub', 'sup', 'small', 'abbr', 'cite', 'q', 'figure', 'figcaption', 'img', 'picture', 'video',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'aside', 'section', 'details', 'summary',
+  ],
+  allowedAttributes: {
+    a: ['href', 'title', 'rel', 'target'],
+    img: ['src', 'alt', 'title', 'width', 'height'],
+    video: ['src', 'poster', 'controls', 'preload'],
+    code: ['class'],
+    th: ['colspan', 'rowspan'],
+    td: ['colspan', 'rowspan'],
+    blockquote: ['class'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  transformTags: {
+    a: (tagName, attribs) => ({ tagName, attribs: { ...attribs, rel: 'noopener noreferrer', target: '_blank' } }),
+  },
+  allowedSchemesAppliedToAttributes: ['href', 'src', 'poster'],
+};
+
+/** Raw extractor output -> stored content: absolute URLs, sanitized, images made local for offline reading. */
+export async function processArticle(raw: ExtractedArticle, media: MediaStore): Promise<ExtractedContent> {
+  const body = parseFragment(raw.html);
+
+  resolveUrls(body, raw.baseUrl);
+  const localImages = await localizeImages(body, media);
+
+  const contentHtml = sanitizeHtml(body.innerHTML, SANITIZE);
+  // Pad block ends with a space so adjacent paragraphs don't run together in search snippets.
+  const spaced = contentHtml.replace(/<\/(p|h[1-6]|li|blockquote|pre|figcaption|td|th|dd|dt)>/g, '$& ');
+  const plainText = (parseFragment(spaced).textContent ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const wordCount = plainText ? plainText.split(' ').length : 0;
+
+  const leadImage = raw.leadImage
+    ? ((await downloadImage(raw.leadImage, media)) ?? raw.leadImage)
+    : (localImages.find(isThumbnailSized)?.src ?? null);
+
+  return {
+    title: raw.title,
+    byline: raw.byline,
+    siteName: raw.siteName,
+    excerpt: raw.excerpt ?? (plainText.slice(0, 240) || null),
+    leadImage,
+    contentHtml,
+    plainText,
+    wordCount,
+    publishedAt: raw.publishedAt,
+  };
+}
+
+function resolveUrls(root: HTMLElement, base: string) {
+  const abs = (v: string | null) => {
+    if (!v) return null;
+    try {
+      return new URL(v, base).href;
+    } catch {
+      return null;
+    }
+  };
+  root.querySelectorAll('img').forEach((img) => {
+    // Lazy-loading sites keep the real image in data-* attributes; srcset is dropped after picking the largest.
+    const candidate =
+      largestFromSrcset(img.getAttribute('srcset') ?? img.getAttribute('data-srcset')) ??
+      img.getAttribute('data-src') ??
+      img.getAttribute('data-original') ??
+      img.getAttribute('src');
+    const src = abs(candidate);
+    if (src) img.setAttribute('src', src);
+    else img.remove();
+  });
+  root.querySelectorAll('picture source').forEach((s) => s.remove());
+  root.querySelectorAll('a[href]').forEach((a) => {
+    const href = abs(a.getAttribute('href'));
+    if (href) a.setAttribute('href', href);
+  });
+}
+
+function largestFromSrcset(srcset: string | null): string | null {
+  if (!srcset) return null;
+  const candidates = srcset
+    .split(',')
+    .map((part) => part.trim().split(/\s+/))
+    .filter(([url]) => url)
+    .map(([url, size]) => ({ url: url!, weight: parseFloat(size ?? '1') || 1 }));
+  return candidates.sort((a, b) => b.weight - a.weight)[0]?.url ?? null;
+}
+
+interface LocalImage {
+  src: string;
+  width: number | null;
+  height: number | null;
+}
+
+/** Without an og:image, the first real picture in the article is the thumbnail; skip title banners and icons. */
+const isThumbnailSized = (img: LocalImage) => (img.width ?? 999) >= 200 && (img.height ?? 999) >= 120;
+
+async function localizeImages(root: HTMLElement, media: MediaStore): Promise<LocalImage[]> {
+  const imgs = [...root.querySelectorAll('img')].slice(0, MAX_IMAGES);
+  const dimension = (img: HTMLImageElement, attr: string) => {
+    const n = parseInt(img.getAttribute(attr) ?? '', 10);
+    return Number.isFinite(n) ? n : null;
+  };
+  const results: (LocalImage | null)[] = new Array(imgs.length).fill(null);
+  for (let i = 0; i < imgs.length; i += IMAGE_CONCURRENCY) {
+    await Promise.all(
+      imgs.slice(i, i + IMAGE_CONCURRENCY).map(async (img, j) => {
+        const local = await downloadImage(img.getAttribute('src')!, media);
+        if (!local) return;
+        img.setAttribute('src', local);
+        results[i + j] = { src: local, width: dimension(img, 'width'), height: dimension(img, 'height') };
+      }),
+    );
+  }
+  return results.filter((r): r is LocalImage => r !== null);
+}
+
+/** Stores the image in the media store. Returns its `/api/media/...` path, or null to keep the remote URL. */
+export async function downloadImage(url: string, media: MediaStore): Promise<string | null> {
+  if (url.startsWith(MEDIA_PREFIX)) return url;
+  try {
+    const res = await httpGet(url, { accept: 'image/avif,image/webp,image/*,*/*;q=0.8', timeoutMs: 15_000 });
+    const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+    const ext = EXT_BY_TYPE[type];
+    if (!ext) return null;
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (bytes.length > MAX_IMAGE_BYTES) return null;
+    return await media.save(bytes, type, ext);
+  } catch {
+    return null; // keep the remote URL; it still works online
+  }
+}

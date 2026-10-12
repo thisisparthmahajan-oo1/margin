@@ -1,0 +1,26 @@
+{
+  "name": "margin",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm -w @margin/server run dev\" \"npm -w @margin/web run dev\"",
+    "build": "npm -w @margin/web run build",
+    "build:vercel": "node scripts/build-vercel.mjs",
+    "android:build": "node scripts/build-android.mjs",
+    "start": "npm -w @margin/server run start",
+    "test": "npm -w @margin/server run test && npm -w @margin/web run test",
+    "typecheck": "npm -w @margin/server run typecheck && npm -w @margin/web run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.6.0"
+  }
+}
