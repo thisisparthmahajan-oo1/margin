@@ -60,6 +60,20 @@ export function createApp(opts: AppOptions) {
   // Behind auth: 200 means the current credentials are still accepted.
   app.get('/api/session', (c) => c.json({ ok: true }));
 
+  // Behind auth: is the database reachable? Reports the config in use and the driver's error, never credentials.
+  app.get('/api/status', async (c) => {
+    const uri = process.env.MONGODB_URI;
+    const host = (uri ?? 'mongodb://127.0.0.1:27017 (default: MONGODB_URI not set)').replace(/\/\/[^@/]*@/, '//***@');
+    try {
+      await opts.deps();
+      return c.json({ db: 'ok', mongodbUriSet: Boolean(uri), host });
+    } catch (e) {
+      const err = e as Error;
+      const message = `${err.name}: ${err.message}`.replace(/\/\/[^@/\s]*@/g, '//***@');
+      return c.json({ db: 'error', mongodbUriSet: Boolean(uri), host, error: message.slice(0, 500) }, 503);
+    }
+  });
+
   app.use('/api/*', async (c, next) => {
     c.set('deps', await opts.deps());
     await next();

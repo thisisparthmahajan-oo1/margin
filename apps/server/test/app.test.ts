@@ -42,6 +42,13 @@ describe('api', () => {
     expect((await app('rotated').request('/api/session', { headers: { authorization: `Bearer ${session}` } })).status).toBe(401);
   });
 
+  it('status reports database health behind auth', async () => {
+    expect((await app('secret').request('/api/status')).status).toBe(401);
+    const res = await app('secret').request('/api/status', { headers: { authorization: 'Bearer secret' } });
+    expect(res.status).toBe(200);
+    expect((await res.json()).db).toBe('ok');
+  });
+
   it('an open server (no APP_TOKEN) needs no sign-in', async () => {
     const res = await app(null).request('/api/session/signin', { method: 'POST', body: '{}' });
     expect(await res.json()).toEqual({ session: null, expiresAt: null });
