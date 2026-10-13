@@ -29,6 +29,18 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
+            <!-- "Share → Margin" and "Open with → Margin" for PDFs saves the file -->
+            <intent-filter android:label="@string/share_label">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <intent-filter android:label="@string/share_label">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="application/pdf" />
+            </intent-filter>
+
         </activity>
 
         <provider

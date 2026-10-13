@@ -1,3 +1,5 @@
+import { watchUrl, youtubeVideoId } from './extractors/youtube.ts';
+
 const TRACKING_PARAMS = /^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref_src|ref_url|igshid)$/i;
 /** X share links append ?s=..&t=..; these mean nothing elsewhere so they're only stripped on x.com. */
 const X_SHARE_PARAMS = /^(s|t)$/i;
@@ -21,6 +23,9 @@ export function parseUserUrl(input: string): URL | null {
 
 /** Key used for de-duplication: same article saved twice from different share links collapses to one. */
 export function canonicalize(url: URL): string {
+  // Every YouTube link form (youtu.be, shorts, ?si=…&t=…) is the same video.
+  const videoId = youtubeVideoId(url);
+  if (videoId) return watchUrl(videoId);
   const u = new URL(url.href);
   u.hash = '';
   u.protocol = 'https:';

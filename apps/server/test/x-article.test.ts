@@ -74,3 +74,34 @@ describe('real X Article (trimmed FxTwitter response, x.com/DeRonin_/status/2033
     expect(real.html).toMatch(/<ul><li>/);
   });
 });
+
+describe('videos on X', () => {
+  const post = (media: object) =>
+    fromFxStatus({
+      code: 200,
+      message: 'OK',
+      tweet: { id: '1', url: 'https://x.com/a/status/1', text: 'Watch this', author: { name: 'A', screen_name: 'a' }, media },
+    } as unknown as FxStatusResponse);
+
+  it('labels a post with a video and plays it inline (streamed, not downloaded)', () => {
+    const p = post({ videos: [{ type: 'video', url: 'https://video.twimg.com/v.mp4', thumbnail_url: 'https://pbs.twimg.com/t.jpg' }] });
+    expect(p.hasVideo).toBe(true);
+    expect(p.kind).toBe('article');
+    expect(p.leadImage).toBe('https://pbs.twimg.com/t.jpg');
+    expect(p.html).toContain('<video controls preload="none" src="https://video.twimg.com/v.mp4" poster="https://pbs.twimg.com/t.jpg">');
+  });
+
+  it('does not label posts with only photos, or Articles with only images', () => {
+    expect(post({ photos: [{ url: 'https://pbs.twimg.com/p.jpg' }] }).hasVideo).toBe(false);
+    expect(fromFxStatus(realFixture as unknown as FxStatusResponse).hasVideo).toBe(false);
+  });
+
+  it('labels an Article that contains a video', () => {
+    const withVideo = structuredClone(fixture) as unknown as FxStatusResponse;
+    withVideo.tweet!.article!.media_entities.push({
+      media_id: 'v1',
+      media_info: { __typename: 'ApiVideo', variants: [{ url: 'https://video.twimg.com/a.mp4', bitrate: 1 }] },
+    });
+    expect(fromFxStatus(withVideo).hasVideo).toBe(true);
+  });
+});

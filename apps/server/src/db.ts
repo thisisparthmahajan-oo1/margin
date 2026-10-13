@@ -15,6 +15,16 @@ export type FolderDoc = Omit<Folder, 'id'> & { _id: string };
 export type HighlightDoc = Omit<Highlight, 'id'> & { _id: string };
 /** `expiresAt` drives a TTL index: deletion records only need to live long enough for devices to sync them. */
 export type DeletionDoc = Deletion & { _id: string; expiresAt: Date };
+/**
+ * Space reserved for a file a device is uploading (between prepare and finish), so concurrent uploads
+ * can't together exceed the storage limit. Keyed by storage key. Abandoned ones are cleaned up on sync.
+ */
+export interface UploadDoc {
+  _id: string;
+  bookmarkId: string;
+  bytes: number;
+  createdAt: number;
+}
 
 export interface Collections {
   db: Db;
@@ -22,6 +32,7 @@ export interface Collections {
   folders: Collection<FolderDoc>;
   highlights: Collection<HighlightDoc>;
   deletions: Collection<DeletionDoc>;
+  uploads: Collection<UploadDoc>;
 }
 
 export function collections(db: Db): Collections {
@@ -31,6 +42,7 @@ export function collections(db: Db): Collections {
     folders: db.collection<FolderDoc>('folders'),
     highlights: db.collection<HighlightDoc>('highlights'),
     deletions: db.collection<DeletionDoc>('deletions'),
+    uploads: db.collection<UploadDoc>('uploads'),
   };
 }
 
@@ -40,6 +52,7 @@ export async function ensureIndexes(c: Collections) {
     c.bookmarks.createIndex({ updatedAt: 1 }),
     c.bookmarks.createIndex({ status: 1, updatedAt: 1 }),
     c.bookmarks.createIndex({ mediaPaths: 1 }),
+    c.bookmarks.createIndex({ 'file.key': 1 }, { sparse: true }),
     c.bookmarks.createIndex(
       { title: 'text', siteName: 'text', plainText: 'text' },
       { name: 'bookmarks_text', weights: { title: 10, siteName: 3, plainText: 1 }, default_language: 'english' },
@@ -49,6 +62,7 @@ export async function ensureIndexes(c: Collections) {
     c.highlights.createIndex({ bookmarkId: 1 }),
     c.deletions.createIndex({ deletedAt: 1 }),
     c.deletions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    c.uploads.createIndex({ createdAt: 1 }),
   ]);
 }
 
@@ -58,6 +72,11 @@ export async function backfill(c: Collections) {
   for await (const doc of missing) {
     await c.bookmarks.updateOne({ _id: doc._id }, { $set: { mediaPaths: mediaPathsIn(doc.contentHtml, doc.leadImage) } });
   }
+  // Items saved before PDFs and videos existed are articles.
+  await c.bookmarks.updateMany(
+    { kind: { $exists: false } },
+    { $set: { kind: 'article', hasVideo: false, file: null, video: null } },
+  );
 }
 
 /**

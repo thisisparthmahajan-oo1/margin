@@ -11,8 +11,9 @@ const app = (appToken: string | null) =>
   createApp({
     appToken,
     deps: async () => ({
-      store: createStore(ctx.c, createMediaStore(ctx.db)),
+      store: createStore(ctx.c, createMediaStore(ctx.db), null),
       media: createMediaStore(ctx.db),
+      files: null,
       ingestor: { enqueue: (id: string) => void enqueued.push(id) },
     }),
   });

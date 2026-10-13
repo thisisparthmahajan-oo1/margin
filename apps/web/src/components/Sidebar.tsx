@@ -1,4 +1,4 @@
-import { Archive, FolderClosed, Heart, Inbox, Plus, Search, Settings, StickyNote } from 'lucide-react';
+import { Archive, FileText, FolderClosed, Heart, Inbox, MonitorPlay, Plus, Search, Settings, StickyNote } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { createFolder } from '../data/actions.ts';
@@ -54,6 +54,16 @@ export function Sidebar() {
         <li>
           <NavLink to="/liked">
             <Heart size={17} /> Liked
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/pdfs">
+            <FileText size={17} /> PDFs
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/videos">
+            <MonitorPlay size={17} /> Videos
           </NavLink>
         </li>
         <li>

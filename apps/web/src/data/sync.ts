@@ -1,21 +1,48 @@
-import type { Bookmark, Folder, Highlight, SyncResponse } from '@margin/shared';
+import {
+  PDF_CONTENT_TYPE,
+  type Bookmark,
+  type Folder,
+  type Highlight,
+  type PrepareUploadResponse,
+  type SyncResponse,
+} from '@margin/shared';
 import { useSyncExternalStore } from 'react';
 import { api, ApiRequestError } from './api.ts';
 import { db, type OutboxOp } from './db.ts';
+import { downloadMissingFiles, pruneFiles } from './files.ts';
 import { downloadMissingMedia, pruneMedia } from './media.ts';
+import { toast } from './toast.ts';
 
 // ---- outbox: one explicit HTTP call per op type ----
 
 type Sender<T extends OutboxOp['type']> = (op: Extract<OutboxOp, { type: T }>) => Promise<void>;
 
+/** The server de-duplicates by address, so the saved item may be an existing one with a different id. */
+const replaceLocal = (localId: string, saved: Bookmark) =>
+  db.transaction('rw', db.bookmarks, async () => {
+    if (saved.id !== localId) await db.bookmarks.delete(localId);
+    await db.bookmarks.put(saved);
+  });
+
 const send: { [T in OutboxOp['type']]: Sender<T> } = {
   'bookmark.create': async (op) => {
-    const saved = await api<Bookmark>('POST', '/api/bookmarks', { id: op.id, url: op.url });
-    // The server de-duplicates by URL, so the saved bookmark may be an existing one with a different id.
-    await db.transaction('rw', db.bookmarks, async () => {
-      if (saved.id !== op.id) await db.bookmarks.delete(op.id);
-      await db.bookmarks.put(saved);
+    await replaceLocal(op.id, await api<Bookmark>('POST', '/api/bookmarks', { id: op.id, url: op.url }));
+  },
+  // prepare (size + storage limit) -> PUT the bytes straight to file storage -> finish.
+  'bookmark.upload': async (op) => {
+    const blob = (await db.files.get(op.key))?.blob;
+    if (!blob) throw new ApiRequestError(410, 'The file is no longer on this device. Add it again.');
+    const sha256 = op.key.slice('files/'.length, -'.pdf'.length);
+    const prepared = await api<PrepareUploadResponse>('POST', '/api/files/prepare', {
+      bookmarkId: op.id, name: op.name, bytes: op.bytes, sha256,
     });
+    if (prepared.status === 'exists') return replaceLocal(op.id, prepared.bookmark);
+    const put = await fetch(prepared.putUrl, { method: 'PUT', body: blob, headers: { 'content-type': PDF_CONTENT_TYPE } });
+    if (put.status >= 400 && put.status < 500) {
+      throw new ApiRequestError(put.status, `File storage refused the upload (HTTP ${put.status}). Try again later.`);
+    }
+    if (!put.ok) throw new Error(`Upload failed (HTTP ${put.status})`); // transient: retried on the next sync
+    await replaceLocal(op.id, await api<Bookmark>('POST', '/api/files/finish', { bookmarkId: op.id, key: op.key, name: op.name }));
   },
   'bookmark.update': async (op) => {
     await db.bookmarks.put(await api<Bookmark>('PATCH', `/api/bookmarks/${op.id}`, op.patch));
@@ -47,8 +74,19 @@ const send: { [T in OutboxOp['type']]: Sender<T> } = {
   'highlight.delete': async (op) => api('DELETE', `/api/highlights/${op.id}`),
 };
 
-const isPermanent = (e: unknown) =>
-  e instanceof ApiRequestError && e.status >= 400 && e.status < 500 && ![401, 408, 429].includes(e.status);
+/** Refused for good: a client error, or a feature the server doesn't have (501). Anything else is retried. */
+const isPermanent = (e: unknown): e is ApiRequestError =>
+  e instanceof ApiRequestError &&
+  ((e.status >= 400 && e.status < 500 && ![401, 408, 429].includes(e.status)) || e.status === 501);
+
+/** What the user sees when the server refuses a change for good. Ops not listed are dropped quietly. */
+const onRejected: { [T in OutboxOp['type']]?: (op: Extract<OutboxOp, { type: T }>, e: ApiRequestError) => Promise<void> } = {
+  // E.g. storage full or the file is too big: the item stays, marked failed with the reason.
+  'bookmark.upload': async (op, e) => {
+    await db.bookmarks.update(op.id, { status: 'failed', error: e.message });
+    toast(e.message, undefined, 10_000);
+  },
+};
 
 async function flushOutbox() {
   for (const entry of await db.outbox.orderBy('seq').toArray()) {
@@ -59,6 +97,8 @@ async function flushOutbox() {
       if (!isPermanent(e)) throw e; // offline or server down: keep the op and retry later, in order
       console.warn('Dropping rejected change', entry.op, e);
       await db.outbox.delete(entry.seq!);
+      const handle = onRejected[entry.op.type] as ((op: OutboxOp, e: ApiRequestError) => Promise<void>) | undefined;
+      await handle?.(entry.op, e);
     }
   }
 }
@@ -88,8 +128,9 @@ async function pull() {
     }
     await db.meta.put({ key: 'syncCursor', value: res.cursor });
   });
-  if (res.reset || res.deletions.some((d) => d.entity === 'bookmark')) await pruneMedia();
+  if (res.reset || res.deletions.some((d) => d.entity === 'bookmark')) await Promise.all([pruneMedia(), pruneFiles()]);
   void downloadMissingMedia(res.bookmarks);
+  void downloadMissingFiles(res.bookmarks);
 }
 
 // ---- status + scheduling ----
@@ -160,7 +201,10 @@ export function startSync() {
   }
   started = true;
   // Catch up on images for articles synced before they could be downloaded (e.g. while offline).
-  void syncNow().then(async () => downloadMissingMedia(await db.bookmarks.toArray()));
+  void syncNow().then(async () => {
+    const all = await db.bookmarks.toArray();
+    await Promise.all([downloadMissingMedia(all), downloadMissingFiles(all)]);
+  });
   const kick = () => void syncNow();
   window.addEventListener('online', kick);
   window.addEventListener('focus', kick);

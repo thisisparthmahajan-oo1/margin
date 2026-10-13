@@ -1,18 +1,27 @@
 import { isInList, type Bookmark } from '@margin/shared';
 import { describe, expect, it } from 'vitest';
+import { backfill } from '../src/db.ts';
 import { createMediaStore } from '../src/media.ts';
 import { createStore, snippet, SYNC_OVERLAP_MS } from '../src/store.ts';
 import { useTestDb } from './mongo.ts';
 
 const ctx = useTestDb();
-const store = () => createStore(ctx.c, createMediaStore(ctx.db));
+const store = () => createStore(ctx.c, createMediaStore(ctx.db), null);
 const save = async (url: string) => (await store().saveBookmark({ url, canonicalUrl: url, source: 'web' })).bookmark;
 const content = (title: string, text: string) => ({
+  kind: 'article' as const, hasVideo: false, file: null, video: null,
   title, byline: null, siteName: 'Site', excerpt: null, leadImage: null,
   contentHtml: `<p>${text}</p>`, plainText: text, wordCount: text.split(' ').length, publishedAt: null,
 });
 
 describe('store', () => {
+  it('backfill makes items saved before PDFs/videos existed plain articles', async () => {
+    const a = await save('https://old.com');
+    await ctx.c.bookmarks.updateOne({ _id: a.id }, { $unset: { kind: '', hasVideo: '', file: '', video: '' } });
+    await backfill(ctx.c);
+    expect(await store().getBookmark(a.id)).toMatchObject({ kind: 'article', hasVideo: false, file: null, video: null });
+  });
+
   it('re-saving an existing URL bumps it back to Home instead of duplicating', async () => {
     const a = await save('https://a.com');
     await store().updateBookmark(a.id, { archived: true });

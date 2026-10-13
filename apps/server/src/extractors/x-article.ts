@@ -60,7 +60,10 @@ interface FxTweet {
   text: string;
   created_timestamp?: number;
   author: { name: string; screen_name: string };
-  media?: { photos?: { url: string }[] };
+  media?: {
+    photos?: { url: string }[];
+    videos?: { type: 'video' | 'gif'; url: string; thumbnail_url?: string }[];
+  };
   article?: FxArticle;
 }
 
@@ -107,12 +110,14 @@ export function fromFxStatus(body: FxStatusResponse): ExtractedArticle {
 
   const byline = `${tweet.author.name} (@${tweet.author.screen_name})`;
   const publishedAt = tweet.created_timestamp ? tweet.created_timestamp * 1000 : null;
-  const base = { byline, siteName: 'X', baseUrl: tweet.url, publishedAt };
+  const postVideos = tweet.media?.videos ?? [];
+  const base = { kind: 'article' as const, byline, siteName: 'X', baseUrl: tweet.url, publishedAt };
 
   if (tweet.article) {
     const a = tweet.article;
     return {
       ...base,
+      hasVideo: postVideos.length > 0 || a.media_entities.some(isVideoMedia),
       title: a.title,
       excerpt: a.preview_text || null,
       leadImage: a.cover_media ? mediaImageUrl(a.cover_media) : null,
@@ -121,19 +126,33 @@ export function fromFxStatus(body: FxStatusResponse): ExtractedArticle {
   }
 
   // A regular post: keep it readable rather than failing, even though Articles are the focus.
+  // Videos aren't downloaded; they stream from X when online.
   const photos = tweet.media?.photos ?? [];
   return {
     ...base,
+    hasVideo: postVideos.length > 0,
     title: `${tweet.author.name} on X`,
     excerpt: tweet.text.slice(0, 200),
-    leadImage: photos[0]?.url ?? null,
+    leadImage: photos[0]?.url ?? postVideos[0]?.thumbnail_url ?? null,
     html:
       tweet.text
         .split(/\n{2,}/)
         .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
-        .join('') + photos.map((p) => `<figure><img src="${escapeAttr(p.url)}" alt=""></figure>`).join(''),
+        .join('') +
+      photos.map((p) => `<figure><img src="${escapeAttr(p.url)}" alt=""></figure>`).join('') +
+      postVideos
+        .map(
+          (v) =>
+            `<figure><video controls preload="none" src="${escapeAttr(v.url)}"${
+              v.thumbnail_url ? ` poster="${escapeAttr(v.thumbnail_url)}"` : ''
+            }></video></figure>`,
+        )
+        .join(''),
   };
 }
+
+/** Article media that plays: videos and GIFs (X serves GIFs as looping videos). */
+const isVideoMedia = (m: FxMedia) => m.media_info.__typename !== 'ApiImage';
 
 // ---- Draft.js content state -> HTML ----
 

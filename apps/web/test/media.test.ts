@@ -5,7 +5,8 @@ import { db } from '../src/data/db.ts';
 import { pruneMedia } from '../src/data/media.ts';
 
 const bookmark = (id: string, images: string[], leadImage: string | null = null): Bookmark => ({
-  id, url: `https://${id}.com`, canonicalUrl: `https://${id}.com`, source: 'web', status: 'ready', error: null,
+  id, url: `https://${id}.com`, canonicalUrl: `https://${id}.com`, source: 'web', kind: 'article', status: 'ready', error: null,
+  hasVideo: false, file: null, video: null,
   title: id, byline: null, siteName: null, excerpt: null, leadImage, wordCount: 1, publishedAt: null,
   contentHtml: images.map((src) => `<img src="${src}">`).join(''),
   folderId: null, likedAt: null, archivedAt: null, progress: 0, progressUpdatedAt: null, savedAt: 0, updatedAt: 0,

@@ -6,9 +6,10 @@ import { useTestDb } from './mongo.ts';
 const ctx = useTestDb();
 const setup = () => {
   const media = createMediaStore(ctx.db);
-  return { media, store: createStore(ctx.c, media) };
+  return { media, store: createStore(ctx.c, media, null) };
 };
 const article = (title: string, images: string[], leadImage: string | null = null) => ({
+  kind: 'article' as const, hasVideo: false, file: null, video: null,
   title, byline: null, siteName: null, excerpt: null, leadImage, plainText: title, wordCount: 1, publishedAt: null,
   contentHtml: images.map((src) => `<img src="${src}">`).join(''),
 });

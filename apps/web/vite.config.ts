@@ -27,7 +27,8 @@ export default defineConfig({
         share_target: { action: '/add', method: 'GET', enctype: 'application/x-www-form-urlencoded', params: { url: 'url', text: 'text', title: 'title' } },
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // .mjs is the pdf.js worker, so PDFs open offline.
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,woff2}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
       },

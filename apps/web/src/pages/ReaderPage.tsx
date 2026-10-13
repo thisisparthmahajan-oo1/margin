@@ -1,4 +1,5 @@
-import { readingMinutes, type Bookmark, type Highlight } from '@margin/shared';
+import { formatBytes, lengthLabel, type Bookmark, type Highlight } from '@margin/shared';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Archive,
   ArchiveRestore,
@@ -14,7 +15,7 @@ import {
   StickyNote,
   Type,
 } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MoveMenu } from '../components/MoveMenu.tsx';
 import { Toasts } from '../components/Toasts.tsx';
@@ -27,15 +28,22 @@ import {
   updateBookmark,
   updateHighlightNote,
 } from '../data/actions.ts';
+import { fileBlob } from '../data/files.ts';
 import { localizeMedia } from '../data/media.ts';
-import { domainOf, useBookmark, useHighlights } from '../data/queries.ts';
+import { canOpen, domainOf, useBookmark, useHighlights } from '../data/queries.ts';
 import { FONTS, THEMES, useAppSettings, useReaderSettings } from '../data/settings.ts';
 import { toast } from '../data/toast.ts';
 import { clearHighlights, describeRange, highlight } from '../reader/anchor.ts';
 import { ReaderSettingsPanel } from '../reader/ReaderSettingsPanel.tsx';
 import { useSpeech } from '../reader/useSpeech.ts';
+import { VideoHeader } from '../reader/VideoHeader.tsx';
+
+// pdf.js is large; it's only loaded when a PDF's original pages are shown.
+const PdfView = lazy(() => import('../reader/PdfView.tsx'));
 
 type Panel = 'settings' | 'highlights' | 'move' | null;
+/** A PDF reads as extracted text (with highlights, Listen, themes) or as its original pages. */
+type View = 'text' | 'original';
 
 export function ReaderPage() {
   const { id } = useParams();
@@ -67,7 +75,7 @@ export function ReaderPage() {
 
   return (
     <div className={`reader theme-${settings.theme}`} style={style}>
-      {bookmark === undefined ? null : bookmark === null || bookmark.status !== 'ready' ? (
+      {bookmark === undefined ? null : bookmark === null || !canOpen(bookmark) ? (
         <div className="reader-missing">
           <p>{bookmark?.status === 'pending' ? 'This article is still downloading.' : 'This article isn’t available offline.'}</p>
           <Link to="/">Back to Home</Link>
@@ -93,6 +101,10 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
   const [selection, setSelection] = useState<{ top: number; left: number; range: Range } | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<{ id: string; top: number; left: number } | null>(null);
   const speech = useSpeech(contentRef);
+  const hasText = b.contentHtml !== null && b.status === 'ready';
+  const [view, setView] = useState<View>(hasText ? 'text' : 'original');
+  const showing: View = hasText ? view : 'original';
+  const pdf = useLiveQuery(async () => (b.file ? await fileBlob(b.file.key) : null), [b.file?.key]);
 
   const goBack = useCallback(() => {
     if (location.key !== 'default') navigate(-1);
@@ -105,7 +117,7 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
     if (!contentRef.current) return;
     contentRef.current.innerHTML = b.contentHtml ?? '';
     void localizeMedia(contentRef.current);
-  }, [b.contentHtml]);
+  }, [b.contentHtml, showing]);
 
   useLayoutEffect(() => {
     const root = contentRef.current;
@@ -114,7 +126,7 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
     for (const h of highlights) {
       highlight(root, h.anchor, { 'data-hl': h.id, class: h.note ? 'hl has-note' : 'hl' });
     }
-  }, [highlights, b.contentHtml]);
+  }, [highlights, b.contentHtml, showing]);
 
   // ---- reading position ----
 
@@ -238,20 +250,33 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
         <button className="icon-button" aria-label="Back" onClick={goBack}>
           <ArrowLeft size={20} />
         </button>
+        {b.kind === 'pdf' && hasText && (
+          <div className="segmented view-switch" role="radiogroup" aria-label="Show">
+            {(['text', 'original'] as const).map((v) => (
+              <button key={v} role="radio" aria-checked={showing === v} onClick={() => setView(v)}>
+                {v === 'text' ? 'Text' : 'Original'}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="reader-tools">
-          <button className="icon-button" aria-label="Text settings" aria-expanded={panel === 'settings'} onClick={() => togglePanel('settings')}>
-            <Type size={19} />
-          </button>
-          <button
-            className="icon-button"
-            aria-label={`Highlights (${highlights.length})`}
-            aria-expanded={panel === 'highlights'}
-            onClick={() => togglePanel('highlights')}
-          >
-            <Highlighter size={19} />
-            {highlights.length > 0 && <span className="badge">{highlights.length}</span>}
-          </button>
-          {speech.supported && (
+          {showing === 'text' && (
+            <>
+              <button className="icon-button" aria-label="Text settings" aria-expanded={panel === 'settings'} onClick={() => togglePanel('settings')}>
+                <Type size={19} />
+              </button>
+              <button
+                className="icon-button"
+                aria-label={`Highlights (${highlights.length})`}
+                aria-expanded={panel === 'highlights'}
+                onClick={() => togglePanel('highlights')}
+              >
+                <Highlighter size={19} />
+                {highlights.length > 0 && <span className="badge">{highlights.length}</span>}
+              </button>
+            </>
+          )}
+          {speech.supported && showing === 'text' && (
             <button className="icon-button" aria-label="Listen" onClick={speech.state === 'stopped' ? speech.play : speech.stop}>
               <Headphones size={19} />
             </button>
@@ -288,22 +313,47 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
         )}
       </header>
 
-      <article className="reader-article" onClick={() => panel && panel !== 'move' && setPanel(null)}>
+      <article
+        className={`reader-article${showing === 'original' ? ' original' : ''}`}
+        onClick={() => panel && panel !== 'move' && setPanel(null)}
+      >
         <header className="article-head">
           <p className="article-source">
-            <a href={b.url} target="_blank" rel="noopener noreferrer">
-              {b.source === 'x' ? 'x.com' : (b.siteName ?? domainOf(b.url))}
-              <ExternalLink size={13} aria-hidden />
-            </a>
+            {b.source === 'upload' ? (
+              <span>PDF{b.file ? `, ${formatBytes(b.file.bytes)}` : ''}</span>
+            ) : (
+              <a href={b.url} target="_blank" rel="noopener noreferrer">
+                {b.source === 'x' ? 'x.com' : (b.siteName ?? domainOf(b.url))}
+                <ExternalLink size={13} aria-hidden />
+              </a>
+            )}
           </p>
           <h1 className="article-title">{b.title}</h1>
           <p className="article-byline">
-            {[b.byline, published, `${readingMinutes(b.wordCount)} min read`].filter(Boolean).map((part) => (
+            {[b.byline, published, b.kind === 'article' ? `${lengthLabel(b)} read` : lengthLabel(b)].filter(Boolean).map((part) => (
               <span key={part}>{part}</span>
             ))}
           </p>
         </header>
-        <div className="article-body" ref={contentRef} onClick={onContentClick} />
+        {b.kind === 'video' && <VideoHeader bookmark={b} />}
+        {showing === 'text' ? (
+          <div className="article-body" ref={contentRef} onClick={onContentClick} />
+        ) : (
+          <>
+            {b.status === 'pending' && <p className="notice">Margin is still reading the text of this PDF. Its pages are below.</p>}
+            {b.status === 'failed' && <p className="notice">{b.error} Its pages are below, from this device.</p>}
+            {b.status === 'ready' && !hasText && (
+              <p className="notice">This PDF has no selectable text (it may be a scan), so it’s shown as its original pages.</p>
+            )}
+            {pdf ? (
+              <Suspense fallback={<p className="pdf-message">Opening the PDF…</p>}>
+                <PdfView blob={pdf} />
+              </Suspense>
+            ) : (
+              pdf === null && <p className="pdf-message">The PDF is downloading to this device. It opens here once it has arrived.</p>
+            )}
+          </>
+        )}
         <footer className="article-end">
           <button className="button" onClick={archiveAndLeave}>
             {b.archivedAt ? 'Move to Home' : 'Archive this article'}

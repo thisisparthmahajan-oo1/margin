@@ -23,6 +23,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import { TokenGate } from './components/TokenGate.tsx';
 import { saveUrl } from './data/actions.ts';
+import { addFiles } from './data/addFiles.ts';
 import { initAuth, onSignedIn } from './data/auth.ts';
 import { startSync } from './data/sync.ts';
 import { toast } from './data/toast.ts';
@@ -42,6 +43,8 @@ const router = createBrowserRouter([
       { path: '/', element: <ListPage list={{ kind: 'home' }} /> },
       { path: '/liked', element: <ListPage list={{ kind: 'liked' }} /> },
       { path: '/archive', element: <ListPage list={{ kind: 'archive' }} /> },
+      { path: '/pdfs', element: <ListPage list={{ kind: 'pdfs' }} /> },
+      { path: '/videos', element: <ListPage list={{ kind: 'videos' }} /> },
       { path: '/folder/:folderId', element: <ListPage /> },
       { path: '/notes', element: <NotesPage /> },
       { path: '/search', element: <SearchPage /> },
@@ -62,9 +65,9 @@ onSignedIn(() => {
   startSync();
   if (shareTargetReady) return;
   shareTargetReady = true;
-  initShareTarget(async (text) => {
-    const id = await saveUrl(text);
-    toast(id ? 'Saved to Home' : 'No link found in what was shared');
+  initShareTarget(async (item) => {
+    if (item.type === 'file') await addFiles([item]);
+    else toast((await saveUrl(item.text)) ? 'Saved to Home' : 'No link found in what was shared');
     void router.navigate('/');
   });
 });

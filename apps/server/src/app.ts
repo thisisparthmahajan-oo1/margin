@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { SessionResponse, SignInRequest } from '@margin/shared';
 import type { AppEnv, Deps } from './deps.ts';
 import { bookmarkRoutes } from './routes/bookmarks.ts';
+import { fileRoutes } from './routes/files.ts';
 import { folderRoutes } from './routes/folders.ts';
 import { highlightRoutes } from './routes/highlights.ts';
 import { mediaRoutes } from './routes/media.ts';
@@ -85,6 +86,7 @@ export function createApp(opts: AppOptions) {
   app.route('/api/search', searchRoutes);
   app.route('/api/sync', syncRoutes);
   app.route('/api/media', mediaRoutes);
+  app.route('/api/files', fileRoutes);
 
   if (opts.webDist && fs.existsSync(opts.webDist)) {
     const root = path.relative(process.cwd(), opts.webDist);

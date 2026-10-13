@@ -1,5 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
-import type { ExtractedArticle } from './extractors/index.ts';
+import type { ExtractedArticle, ExtractedText, ExtractedVideo } from './extractors/index.ts';
 import { parseFragment } from './html.ts';
 import { httpGet } from './http.ts';
 import { MEDIA_PREFIX, type MediaStore } from './media.ts';
@@ -41,20 +41,26 @@ const SANITIZE: sanitizeHtml.IOptions = {
   allowedSchemesAppliedToAttributes: ['href', 'src', 'poster'],
 };
 
-/** Raw extractor output -> stored content: absolute URLs, sanitized, images made local for offline reading. */
-export async function processArticle(raw: ExtractedArticle, media: MediaStore): Promise<ExtractedContent> {
+/** A web page or video, extracted -> stored content. (PDFs go through `processPdf` in pdf.ts.) */
+export async function processPage(raw: ExtractedArticle | ExtractedVideo, media: MediaStore): Promise<ExtractedContent> {
+  const text = await processText(raw, media);
+  switch (raw.kind) {
+    case 'article':
+      return { ...text, kind: 'article', hasVideo: raw.hasVideo, file: null, video: null };
+    case 'video':
+      return { ...text, kind: 'video', hasVideo: true, file: null, video: raw.video };
+  }
+}
+
+/** Absolute URLs, sanitized, images made local for offline reading. */
+async function processText(raw: ExtractedText, media: MediaStore) {
   const body = parseFragment(raw.html);
 
   resolveUrls(body, raw.baseUrl);
   const localImages = await localizeImages(body, media);
 
-  const contentHtml = sanitizeHtml(body.innerHTML, SANITIZE);
-  // Pad block ends with a space so adjacent paragraphs don't run together in search snippets.
-  const spaced = contentHtml.replace(/<\/(p|h[1-6]|li|blockquote|pre|figcaption|td|th|dd|dt)>/g, '$& ');
-  const plainText = (parseFragment(spaced).textContent ?? '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const wordCount = plainText ? plainText.split(' ').length : 0;
+  const contentHtml = sanitize(body.innerHTML);
+  const { plainText, wordCount } = textOf(contentHtml);
 
   const leadImage = raw.leadImage
     ? ((await downloadImage(raw.leadImage, media)) ?? raw.leadImage)
@@ -71,6 +77,16 @@ export async function processArticle(raw: ExtractedArticle, media: MediaStore): 
     wordCount,
     publishedAt: raw.publishedAt,
   };
+}
+
+export const sanitize = (html: string) => sanitizeHtml(html, SANITIZE);
+
+/** Search text and word count of sanitized HTML. */
+export function textOf(contentHtml: string) {
+  // Pad block ends with a space so adjacent paragraphs don't run together in search snippets.
+  const spaced = contentHtml.replace(/<\/(p|h[1-6]|li|blockquote|pre|figcaption|td|th|dd|dt)>/g, '$& ');
+  const plainText = (parseFragment(spaced).textContent ?? '').replace(/\s+/g, ' ').trim();
+  return { plainText, wordCount: plainText ? plainText.split(' ').length : 0 };
 }
 
 function resolveUrls(root: HTMLElement, base: string) {
@@ -136,6 +152,13 @@ async function localizeImages(root: HTMLElement, media: MediaStore): Promise<Loc
       }),
     );
   }
+  // Video posters too, so a video shows its frame offline (the video itself streams online).
+  await Promise.all(
+    [...root.querySelectorAll('video[poster]')].map(async (v) => {
+      const local = await downloadImage(v.getAttribute('poster')!, media);
+      if (local) v.setAttribute('poster', local);
+    }),
+  );
   return results.filter((r): r is LocalImage => r !== null);
 }
 

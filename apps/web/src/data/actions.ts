@@ -1,5 +1,14 @@
-import type { Bookmark, TextQuoteAnchor, UpdateBookmarkRequest } from '@margin/shared';
+import {
+  fileKeyFor,
+  PDF_CONTENT_TYPE,
+  uploadUrlFor,
+  type Bookmark,
+  type BookmarkSource,
+  type TextQuoteAnchor,
+  type UpdateBookmarkRequest,
+} from '@margin/shared';
 import { db, type OutboxOp } from './db.ts';
+import { isPdf, pruneFiles, sha256Hex } from './files.ts';
 import { pruneMedia } from './media.ts';
 import { syncNow } from './sync.ts';
 
@@ -7,13 +16,33 @@ import { syncNow } from './sync.ts';
  * Every user mutation: apply to the local mirror immediately, queue it for the server, kick a sync.
  * Works the same online and offline.
  */
-async function commit(apply: () => Promise<unknown>, op: OutboxOp) {
+async function commit(apply: () => Promise<unknown>, ...ops: OutboxOp[]) {
   await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.outbox], async () => {
     await apply();
-    await db.outbox.add({ op });
+    for (const op of ops) await db.outbox.add({ op });
   });
   void syncNow();
 }
+
+/** A new item as it looks on this device until the server has processed it. */
+const placeholder = (fields: Pick<Bookmark, 'id' | 'url' | 'source'> & Partial<Bookmark>): Bookmark => {
+  const now = Date.now();
+  return {
+    canonicalUrl: fields.url, kind: 'article', status: 'pending', error: null, title: null, byline: null,
+    siteName: null, excerpt: null, leadImage: null, contentHtml: null, wordCount: 0, publishedAt: null,
+    hasVideo: false, file: null, video: null, folderId: null, likedAt: null, archivedAt: null, progress: 0,
+    progressUpdatedAt: null, savedAt: now, updatedAt: now,
+    ...fields,
+  };
+};
+
+/** Same rules as the server's extractor registry, just enough to label the item while it downloads. */
+const sourceOf = (url: string): BookmarkSource =>
+  /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url)
+    ? 'x'
+    : /^https?:\/\/(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i.test(url)
+      ? 'youtube'
+      : 'web';
 
 /** Pulls a URL out of pasted or shared text ("Look at this https://…"). */
 export function findUrl(text: string): string | null {
@@ -26,15 +55,32 @@ export function findUrl(text: string): string | null {
 export async function saveUrl(input: string): Promise<string | null> {
   const url = findUrl(input);
   if (!url) return null;
-  const now = Date.now();
   const id = crypto.randomUUID();
-  const placeholder: Bookmark = {
-    id, url, canonicalUrl: url, source: /^https?:\/\/(www\.)?(x|twitter)\.com\//i.test(url) ? 'x' : 'web',
-    status: 'pending', error: null, title: null, byline: null, siteName: null, excerpt: null, leadImage: null,
-    contentHtml: null, wordCount: 0, publishedAt: null, folderId: null, likedAt: null, archivedAt: null,
-    progress: 0, progressUpdatedAt: null, savedAt: now, updatedAt: now,
-  };
-  await commit(() => db.bookmarks.put(placeholder), { type: 'bookmark.create', id, url });
+  await commit(() => db.bookmarks.put(placeholder({ id, url, source: sourceOf(url) })), { type: 'bookmark.create', id, url });
+  return id;
+}
+
+/**
+ * Adds a PDF from this device. It's readable here at once (the original is kept on the device);
+ * the upload, and text extraction on the server, follow through the outbox like any other change.
+ * Returns null if the file isn't a PDF.
+ */
+export async function savePdf(file: Blob, name: string): Promise<string | null> {
+  if (!(await isPdf(file))) return null;
+  const sha256 = await sha256Hex(file);
+  const key = fileKeyFor(sha256);
+  await db.files.put({ key, blob: file });
+  const fileName = /\.pdf$/i.test(name) ? name : `${name || 'Document'}.pdf`;
+  const id = crypto.randomUUID();
+  const item = placeholder({
+    id,
+    url: uploadUrlFor(sha256),
+    source: 'upload',
+    kind: 'pdf',
+    title: fileName.replace(/\.pdf$/i, '').replace(/_+/g, ' ').trim() || 'Untitled PDF',
+    file: { key, name: fileName, bytes: file.size, contentType: PDF_CONTENT_TYPE, pages: null },
+  });
+  await commit(() => db.bookmarks.put(item), { type: 'bookmark.upload', id, key, name: fileName, bytes: file.size });
   return id;
 }
 
@@ -77,11 +123,16 @@ export async function deleteBookmark(id: string) {
     await db.highlights.where('bookmarkId').equals(id).delete();
     await db.bookmarks.delete(id);
   }, { type: 'bookmark.delete', id });
-  await pruneMedia();
+  await Promise.all([pruneMedia(), pruneFiles()]);
 }
 
-export async function retryBookmark(id: string) {
-  await commit(() => db.bookmarks.update(id, { status: 'pending', error: null }), { type: 'bookmark.retry', id });
+/** Tries again. A file whose upload was refused (e.g. storage full) is uploaded again first. */
+export async function retryBookmark(b: Bookmark) {
+  const ops: OutboxOp[] =
+    b.source === 'upload' && b.file
+      ? [{ type: 'bookmark.upload', id: b.id, key: b.file.key, name: b.file.name, bytes: b.file.bytes }, { type: 'bookmark.retry', id: b.id }]
+      : [{ type: 'bookmark.retry', id: b.id }];
+  await commit(() => db.bookmarks.update(b.id, { status: 'pending', error: null }), ...ops);
 }
 
 export async function createFolder(name: string) {

@@ -1,4 +1,4 @@
-import { isInList, sortComparators, type ListKey, type SortKey } from '@margin/shared';
+import { isInList, sortComparators, type Bookmark, type ListKey, type SortKey } from '@margin/shared';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db.ts';
 
@@ -29,3 +29,6 @@ export const domainOf = (url: string) => {
     return url;
   }
 };
+
+/** Ready items open in the reader, and so do uploaded PDFs that aren't processed (yet): their original is on the device. */
+export const canOpen = (b: Bookmark) => b.status === 'ready' || (b.kind === 'pdf' && b.source === 'upload');

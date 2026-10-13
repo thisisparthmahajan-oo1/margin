@@ -2,16 +2,20 @@ import { randomUUID } from 'node:crypto';
 import {
   mediaPathsIn,
   type Bookmark,
+  type BookmarkKind,
   type BookmarkSource,
   type EntityName,
   type Folder,
   type Highlight,
   type SearchHit,
+  type StoredFile,
   type SyncResponse,
   type TextQuoteAnchor,
   type UpdateBookmarkRequest,
+  type VideoRef,
 } from '@margin/shared';
-import type { BookmarkDoc, Collections, FolderDoc, HighlightDoc } from './db.ts';
+import type { BookmarkDoc, Collections, FolderDoc, HighlightDoc, UploadDoc } from './db.ts';
+import type { FileStore } from './files.ts';
 import type { MediaStore } from './media.ts';
 
 /**
@@ -21,6 +25,8 @@ import type { MediaStore } from './media.ts';
  */
 export const SYNC_OVERLAP_MS = 10_000;
 const STALE_PENDING_MS = 2 * 60_000;
+/** An upload reservation older than this was abandoned (signed upload URLs last 10 minutes). */
+const ABANDONED_UPLOAD_MS = 60 * 60_000;
 /**
  * Deletion records are kept this long so every device can learn about a delete; after that they
  * expire (TTL index). A device whose last sync is older gets a full snapshot instead (`reset`).
@@ -35,19 +41,36 @@ const CLIENT_PROJECTION = { plainText: 0, mediaPaths: 0 } as const;
 const toFolder = ({ _id, ...rest }: FolderDoc): Folder => ({ id: _id, ...rest });
 const toHighlight = ({ _id, ...rest }: HighlightDoc): Highlight => ({ id: _id, ...rest });
 
+/** Everything processing produces for an item; written in one go when it becomes ready. */
 export interface ExtractedContent {
+  kind: BookmarkKind;
   title: string;
   byline: string | null;
   siteName: string | null;
   excerpt: string | null;
   leadImage: string | null;
-  contentHtml: string;
-  plainText: string;
+  /** null: no readable text (a scanned PDF). */
+  contentHtml: string | null;
+  plainText: string | null;
   wordCount: number;
   publishedAt: number | null;
+  hasVideo: boolean;
+  file: StoredFile | null;
+  video: VideoRef | null;
 }
 
-export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>) {
+export interface NewBookmark {
+  id?: string;
+  url: string;
+  canonicalUrl: string;
+  source: BookmarkSource;
+  /** Known up front for uploaded files; links are articles until processing says otherwise. */
+  kind?: BookmarkKind;
+  title?: string | null;
+  file?: StoredFile | null;
+}
+
+export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, files: Pick<FileStore, 'remove'> | null) {
   const recordDeletion = (entity: EntityName, id: string) => {
     const t = now();
     return c.deletions.replaceOne(
@@ -63,6 +86,27 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>) {
       const stillUsed = await c.bookmarks.findOne({ mediaPaths: path }, { projection: { _id: 1 } });
       if (!stillUsed) await media.remove(path);
     }
+  };
+
+  /** Deletes a stored file once no item uses it and no upload has it reserved (same bytes = same key). */
+  const releaseFile = async (key: string | undefined) => {
+    if (!key || !files) return;
+    const [usedBy, reserved] = await Promise.all([
+      c.bookmarks.findOne({ 'file.key': key }, { projection: { _id: 1 } }),
+      c.uploads.findOne({ _id: key }),
+    ]);
+    if (!usedBy && !reserved) await files.remove(key);
+  };
+
+  /** Instapaper semantics: saving something you already have moves it back to the top of Home. Null if it's new. */
+  const resave = async (canonicalUrl: string): Promise<Bookmark | null> => {
+    const t = now();
+    const existing = await c.bookmarks.findOneAndUpdate(
+      { canonicalUrl },
+      { $set: { savedAt: t, archivedAt: null, folderId: null, updatedAt: t } },
+      { returnDocument: 'after', projection: CLIENT_PROJECTION },
+    );
+    return existing ? toBookmark(existing as BookmarkDoc) : null;
   };
 
   const getBookmark = async (id: string) => {
@@ -82,28 +126,25 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>) {
     getBookmark,
     getFolder,
     getHighlight,
+    releaseFile,
 
-    /**
-     * Instapaper semantics: saving a URL you already have moves it back to the top of Home
-     * instead of creating a duplicate. Returns `created: false` in that case.
-     */
-    async saveBookmark(input: { id?: string; url: string; canonicalUrl: string; source: BookmarkSource }) {
+    resave,
+
+    /** Saves a new item, or re-saves an existing one with the same address (`created: false`). */
+    async saveBookmark(input: NewBookmark) {
+      const existing = await resave(input.canonicalUrl);
+      if (existing) return { bookmark: existing, created: false };
       const t = now();
-      const existing = await c.bookmarks.findOneAndUpdate(
-        { canonicalUrl: input.canonicalUrl },
-        { $set: { savedAt: t, archivedAt: null, folderId: null, updatedAt: t } },
-        { returnDocument: 'after' },
-      );
-      if (existing) return { bookmark: toBookmark(existing), created: false };
 
       const doc: BookmarkDoc = {
         _id: input.id ?? randomUUID(),
         url: input.url,
         canonicalUrl: input.canonicalUrl,
         source: input.source,
+        kind: input.kind ?? 'article',
         status: 'pending',
         error: null,
-        title: null,
+        title: input.title ?? null,
         byline: null,
         siteName: null,
         excerpt: null,
@@ -113,6 +154,9 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>) {
         mediaPaths: [],
         wordCount: 0,
         publishedAt: null,
+        hasVideo: false,
+        file: input.file ?? null,
+        video: null,
         folderId: null,
         likedAt: null,
         archivedAt: null,
@@ -133,15 +177,16 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>) {
       await c.bookmarks.updateOne({ _id: id }, { $set: { status: 'failed', error, updatedAt: now() } });
     },
 
-    /** Stores extracted content. On a re-download, images the old version used and the new one doesn't are released. */
+    /** Stores processed content. On a re-download, images and files the old version used and the new one doesn't are released. */
     async markReady(id: string, content: ExtractedContent) {
       const mediaPaths = mediaPathsIn(content.contentHtml, content.leadImage);
       const previous = await c.bookmarks.findOneAndUpdate(
         { _id: id },
         { $set: { ...content, mediaPaths, status: 'ready', error: null, updatedAt: now() } },
-        { projection: { mediaPaths: 1 } },
+        { projection: { mediaPaths: 1, file: 1 } },
       );
       await releaseMedia((previous?.mediaPaths ?? []).filter((p) => !mediaPaths.includes(p)));
+      if (previous?.file && previous.file.key !== content.file?.key) await releaseFile(previous.file.key);
     },
 
     /** Bookmarks whose background fetch was lost (e.g. a serverless instance was frozen). */
@@ -168,15 +213,62 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>) {
       return doc ? toBookmark(doc) : null;
     },
 
-    /** Hard delete: the article, its highlights, and any images no other article uses. */
+    /** Hard delete: the item, its highlights, its file, and any images no other item uses. */
     async deleteBookmark(id: string): Promise<boolean> {
-      const deleted = await c.bookmarks.findOneAndDelete({ _id: id }, { projection: { mediaPaths: 1 } });
+      const deleted = await c.bookmarks.findOneAndDelete({ _id: id }, { projection: { mediaPaths: 1, file: 1 } });
       if (!deleted) return false;
       const highlights = await c.highlights.find({ bookmarkId: id }, { projection: { _id: 1 } }).toArray();
       await c.highlights.deleteMany({ bookmarkId: id });
       await Promise.all([...highlights.map((h) => recordDeletion('highlight', h._id)), recordDeletion('bookmark', id)]);
       await releaseMedia(deleted.mediaPaths ?? []);
+      await releaseFile(deleted.file?.key);
       return true;
+    },
+
+    // ---- file storage accounting ----
+
+    /** Bytes in file storage: every distinct stored file plus space reserved by uploads in progress. */
+    async fileBytesInUse(): Promise<number> {
+      const [stored] = await c.bookmarks
+        .aggregate<{ bytes: number }>([
+          { $match: { 'file.key': { $type: 'string' } } },
+          { $group: { _id: '$file.key', bytes: { $first: '$file.bytes' } } },
+          { $group: { _id: null, bytes: { $sum: '$bytes' } } },
+        ])
+        .toArray();
+      const storedKeys = await c.bookmarks.distinct('file.key');
+      const [reserved] = await c.uploads
+        .aggregate<{ bytes: number }>([
+          { $match: { _id: { $nin: storedKeys } } },
+          { $group: { _id: null, bytes: { $sum: '$bytes' } } },
+        ])
+        .toArray();
+      return (stored?.bytes ?? 0) + (reserved?.bytes ?? 0);
+    },
+
+    /** Whether any item uses this stored file (devices may only download files that belong to an item). */
+    async isFileInUse(key: string): Promise<boolean> {
+      return (await c.bookmarks.findOne({ 'file.key': key }, { projection: { _id: 1 } })) !== null;
+    },
+
+    /** Reserves space for an upload; replaces an earlier reservation of the same file. */
+    async reserveUpload(key: string, bookmarkId: string, bytes: number) {
+      await c.uploads.replaceOne({ _id: key }, { bookmarkId, bytes, createdAt: now() }, { upsert: true });
+    },
+
+    getUpload: (key: string): Promise<UploadDoc | null> => c.uploads.findOne({ _id: key }),
+
+    async endUpload(key: string) {
+      await c.uploads.deleteOne({ _id: key });
+    },
+
+    /** Drops reservations of uploads that never finished, and their files if nothing uses them. */
+    async cleanUpAbandonedUploads() {
+      const stale = await c.uploads.find({ createdAt: { $lt: now() - ABANDONED_UPLOAD_MS } }).toArray();
+      for (const upload of stale) {
+        await c.uploads.deleteOne({ _id: upload._id });
+        await releaseFile(upload._id);
+      }
     },
 
     async createFolder(input: { id?: string; name: string }): Promise<Folder> {

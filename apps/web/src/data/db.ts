@@ -7,6 +7,8 @@ export type OutboxOp =
   | { type: 'bookmark.update'; id: string; patch: UpdateBookmarkRequest }
   | { type: 'bookmark.delete'; id: string }
   | { type: 'bookmark.retry'; id: string }
+  /** A file added on this device; its bytes wait in `files` under `key` until uploaded. */
+  | { type: 'bookmark.upload'; id: string; key: string; name: string; bytes: number }
   | { type: 'folder.create'; id: string; name: string }
   | { type: 'folder.update'; id: string; name: string }
   | { type: 'folder.delete'; id: string }
@@ -25,6 +27,12 @@ export interface MediaEntry {
   blob: Blob;
 }
 
+/** An original file (PDF) kept on the device, under its storage key. */
+export interface FileEntry {
+  key: string;
+  blob: Blob;
+}
+
 interface Meta {
   key: 'syncCursor';
   value: number;
@@ -38,6 +46,7 @@ export const db = new Dexie('margin') as Dexie & {
   outbox: EntityTable<OutboxEntry, 'seq'>;
   meta: EntityTable<Meta, 'key'>;
   media: EntityTable<MediaEntry, 'path'>;
+  files: EntityTable<FileEntry, 'key'>;
 };
 
 db.version(1).stores({
@@ -51,3 +60,18 @@ db.version(1).stores({
 db.version(2).stores({
   media: 'path',
 });
+
+db.version(3)
+  .stores({ files: 'key' })
+  .upgrade((tx) =>
+    // Items saved before PDFs and videos existed are articles.
+    tx
+      .table<Bookmark>('bookmarks')
+      .toCollection()
+      .modify((b) => {
+        b.kind ??= 'article';
+        b.hasVideo ??= false;
+        b.file ??= null;
+        b.video ??= null;
+      }),
+  );
