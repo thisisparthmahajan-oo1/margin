@@ -1363,3 +1363,47 @@ a.row-link:hover .row-title {
     display: none;
   }
 }
+
+/* ---- Tags ---- */
+
+.tag-chip {
+  white-space: nowrap;
+  padding: 0 7px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  color: var(--ink-2);
+  text-decoration: none;
+  line-height: 18px;
+}
+.tag-chip:hover {
+  border-color: var(--ink-3);
+}
+.icon-button.tagged {
+  color: var(--margin);
+}
+.tag-menu {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.tag-filter button {
+  padding: 3px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.tag-filter button:hover {
+  border-color: var(--ink-3);
+}
+.tag-filter button[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}

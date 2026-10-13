@@ -1,8 +1,8 @@
-import { Archive, FileText, FolderClosed, Heart, Inbox, MonitorPlay, Plus, Search, Settings, StickyNote } from 'lucide-react';
+import { Archive, FileText, FolderClosed, Heart, Inbox, MonitorPlay, Plus, Search, Settings, StickyNote, Tag } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { createFolder } from '../data/actions.ts';
-import { useFolders, useHomeCount } from '../data/queries.ts';
+import { useFolders, useHomeCount, useTags } from '../data/queries.ts';
 import { useSyncStatus } from '../data/sync.ts';
 
 const SYNC_LABELS = {
@@ -15,6 +15,7 @@ const SYNC_LABELS = {
 
 export function Sidebar() {
   const folders = useFolders();
+  const tags = useTags();
   const homeCount = useHomeCount();
   const sync = useSyncStatus();
   const navigate = useNavigate();
@@ -108,6 +109,20 @@ export function Sidebar() {
           </li>
         )}
         {folders.length === 0 && newFolder === null && <li className="nav-empty">Group articles into folders with Move.</li>}
+      </ul>
+
+      <div className="nav-heading">
+        <span>Tags</span>
+      </div>
+      <ul className="nav">
+        {tags.map((t) => (
+          <li key={t.id}>
+            <NavLink to={`/tag/${t.id}`}>
+              <Tag size={17} /> {t.name}
+            </NavLink>
+          </li>
+        ))}
+        {tags.length === 0 && <li className="nav-empty">Mark items with Tags, e.g. “Don’t understand yet”.</li>}
       </ul>
 
       <div className="sidebar-foot">

@@ -104,12 +104,13 @@ MARGIN_API_URL=https://marginr.vercel.app npm run ios:device   # build + install
 ## Features
 
 - **Save:** paste a link, or share it to the app. Saving a link you already have moves it back to the top of Home.
-- **Lists:** Home, Liked, PDFs, Videos, Archive, your own folders, and Notes. Sort by newest, oldest, shortest, or longest.
+- **Lists:** Home, Liked, PDFs, Videos, Archive, your own folders, and Notes.
+- **Tags:** mark items with where they stand, e.g. *Don't understand yet*. An item can have any number of tags, whatever its folder. Each tag has its own list, and any list (a folder, Home…) can be narrowed to a tag with the chips under its title. Sort by newest, oldest, shortest, or longest.
 - **Reader:** 5 fonts, text size, line spacing, width, and Light/Sepia/Dark/Black themes. It remembers where you stopped, and can optionally archive an article when you reach the end.
 - **Highlights & notes:** select text, then choose Highlight or Add note. They're all collected on the Notes page.
 - **Search:** searches the full text of every article when online, and titles and summaries when offline.
 - **Listen:** text-to-speech with adjustable speed.
-- **Keyboard (web):** `j`/`k` to move, `Enter` to open, `a` to archive, `l` to like, `/` to search, `n` to add a link, `Esc` to go back.
+- **Keyboard (web):** `j`/`k` to move, `Enter` to open, `a` to archive, `l` to like, `t` for tags, `/` to search, `n` to add a link, `Esc` to go back.
 - **Offline-first:** every change is saved on the device first and synced when you're back online.
 - **Sign-in:** each device asks for the access token once, then stays signed in for 30 days (also offline). Changing `APP_TOKEN` on the server signs every device out.
 
@@ -144,7 +145,6 @@ x.com shows nothing without a login, so X posts are read through the public [FxT
 
 ## Planned
 
-- **Tags**, alongside folders. Mark items with how they're going, for example *"don't understand this yet"* inside a folder, and filter by tag.
 - YouTube transcripts (searchable, readable offline).
 - Cleanup and OCR for messy or scanned PDFs.
 - Highlights on a PDF's original pages.

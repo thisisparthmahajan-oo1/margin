@@ -8,13 +8,14 @@ import {
   type Folder,
   type Highlight,
   type SearchHit,
+  type Tag,
   type StoredFile,
   type SyncResponse,
   type TextQuoteAnchor,
   type UpdateBookmarkRequest,
   type VideoRef,
 } from '@margin/shared';
-import type { BookmarkDoc, Collections, FolderDoc, HighlightDoc, UploadDoc } from './db.ts';
+import { TAG_NAME_COLLATION, type BookmarkDoc, type Collections, type FolderDoc, type HighlightDoc, type TagDoc, type UploadDoc } from './db.ts';
 import type { FileStore } from './files.ts';
 import type { MediaStore } from './media.ts';
 
@@ -40,6 +41,7 @@ const toBookmark = ({ _id, plainText: _text, mediaPaths: _media, ...rest }: Book
 const CLIENT_PROJECTION = { plainText: 0, mediaPaths: 0 } as const;
 const toFolder = ({ _id, ...rest }: FolderDoc): Folder => ({ id: _id, ...rest });
 const toHighlight = ({ _id, ...rest }: HighlightDoc): Highlight => ({ id: _id, ...rest });
+const toTag = ({ _id, ...rest }: TagDoc): Tag => ({ id: _id, ...rest });
 
 /** Everything processing produces for an item; written in one go when it becomes ready. */
 export interface ExtractedContent {
@@ -157,6 +159,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         hasVideo: false,
         file: input.file ?? null,
         video: null,
+        tagIds: [],
         folderId: null,
         likedAt: null,
         archivedAt: null,
@@ -208,6 +211,21 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       if (patch.progress !== undefined) {
         set.progress = Math.min(1, Math.max(0, patch.progress));
         set.progressUpdatedAt = t;
+      }
+      if (patch.addTagIds?.length || patch.removeTagIds?.length) {
+        // One atomic update (union, then difference), so concurrent changes from other devices merge.
+        await c.bookmarks.updateOne({ _id: id }, [
+          {
+            $set: {
+              tagIds: {
+                $setDifference: [
+                  { $setUnion: [{ $ifNull: ['$tagIds', []] }, { $literal: patch.addTagIds ?? [] }] },
+                  { $literal: patch.removeTagIds ?? [] },
+                ],
+              },
+            },
+          },
+        ]);
       }
       const doc = await c.bookmarks.findOneAndUpdate({ _id: id }, { $set: set }, { returnDocument: 'after' });
       return doc ? toBookmark(doc) : null;
@@ -302,6 +320,51 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       return true;
     },
 
+    getTag: async (id: string) => {
+      const doc = await c.tags.findOne({ _id: id });
+      return doc ? toTag(doc) : null;
+    },
+
+    /** Whether every id is an existing tag. */
+    async tagsExist(ids: string[]): Promise<boolean> {
+      const unique = [...new Set(ids)];
+      return (await c.tags.countDocuments({ _id: { $in: unique } })) === unique.length;
+    },
+
+    /** Creates a tag, or returns the existing one with that name (names are unique, ignoring case). */
+    async createTag(input: { id?: string; name: string }): Promise<Tag> {
+      const existing = await c.tags.findOne({ name: input.name }, { collation: TAG_NAME_COLLATION });
+      if (existing) return toTag(existing);
+      const t = now();
+      const doc: TagDoc = { _id: input.id ?? randomUUID(), name: input.name, createdAt: t, updatedAt: t };
+      try {
+        await c.tags.insertOne(doc);
+      } catch (e) {
+        // Created at the same moment from another device: use that one.
+        const winner = await c.tags.findOne({ name: input.name }, { collation: TAG_NAME_COLLATION });
+        if ((e as { code?: number }).code === 11000 && winner) return toTag(winner);
+        throw e;
+      }
+      return toTag(doc);
+    },
+
+    /** Renames a tag. Null if it doesn't exist; 'taken' if another tag already has the name. */
+    async renameTag(id: string, name: string): Promise<Tag | null | 'taken'> {
+      const clash = await c.tags.findOne({ name, _id: { $ne: id } }, { collation: TAG_NAME_COLLATION });
+      if (clash) return 'taken';
+      const doc = await c.tags.findOneAndUpdate({ _id: id }, { $set: { name, updatedAt: now() } }, { returnDocument: 'after' });
+      return doc ? toTag(doc) : null;
+    },
+
+    /** Removes the tag from every item (bumped so devices sync the change) and deletes it. */
+    async deleteTag(id: string): Promise<boolean> {
+      const { deletedCount } = await c.tags.deleteOne({ _id: id });
+      if (!deletedCount) return false;
+      await c.bookmarks.updateMany({ tagIds: id }, { $pull: { tagIds: id }, $set: { updatedAt: now() } });
+      await recordDeletion('tag', id);
+      return true;
+    },
+
     async createHighlight(input: { id?: string; bookmarkId: string; anchor: TextQuoteAnchor; note?: string | null }) {
       const t = now();
       const doc: HighlightDoc = {
@@ -340,10 +403,11 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       const reset = requestedSince > 0 && requestedSince < t - DELETION_RETENTION_MS;
       const since = reset ? 0 : requestedSince;
       const changed = { updatedAt: { $gt: since } };
-      const [bookmarks, folders, highlights, deletions] = await Promise.all([
+      const [bookmarks, folders, highlights, tags, deletions] = await Promise.all([
         c.bookmarks.find(changed, { projection: CLIENT_PROJECTION }).toArray(),
         c.folders.find(changed).toArray(),
         c.highlights.find(changed).toArray(),
+        c.tags.find(changed).toArray(),
         reset ? [] : c.deletions.find({ deletedAt: { $gt: since } }).toArray(),
       ]);
       return {
@@ -352,6 +416,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         bookmarks: bookmarks.map((d) => toBookmark(d as BookmarkDoc)),
         folders: folders.map(toFolder),
         highlights: highlights.map(toHighlight),
+        tags: tags.map(toTag),
         deletions: deletions.map(({ entity, id, deletedAt }) => ({ entity, id, deletedAt })),
       };
     },

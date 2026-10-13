@@ -14,6 +14,7 @@ import { highlightRoutes } from './routes/highlights.ts';
 import { mediaRoutes } from './routes/media.ts';
 import { searchRoutes } from './routes/search.ts';
 import { syncRoutes } from './routes/sync.ts';
+import { tagRoutes } from './routes/tags.ts';
 import { createSession, isValidSession, safeEqual } from './session.ts';
 
 /**
@@ -86,6 +87,7 @@ export function createApp(opts: AppOptions) {
 
   app.route('/api/bookmarks', bookmarkRoutes);
   app.route('/api/folders', folderRoutes);
+  app.route('/api/tags', tagRoutes);
   app.route('/api/highlights', highlightRoutes);
   app.route('/api/search', searchRoutes);
   app.route('/api/sync', syncRoutes);

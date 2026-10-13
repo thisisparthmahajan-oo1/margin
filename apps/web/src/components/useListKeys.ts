@@ -6,7 +6,7 @@ import { toggleArchive, toggleLike } from '../data/actions.ts';
 const isTyping = (e: KeyboardEvent) =>
   e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
 
-/** Instapaper-style list shortcuts: j/k move, Enter/o open, a archive, l like, / search, n new link. */
+/** Instapaper-style list shortcuts: j/k move, Enter/o open, a archive, l like, t tags, / search, n new link. */
 export function useListKeys(items: Bookmark[]) {
   const [selected, setSelected] = useState(-1);
   const navigate = useNavigate();
@@ -22,6 +22,7 @@ export function useListKeys(items: Bookmark[]) {
         o: () => current?.status === 'ready' && navigate(`/read/${current.id}`),
         a: () => current && void toggleArchive(current),
         l: () => current && void toggleLike(current),
+        t: () => document.querySelector<HTMLButtonElement>('.row.selected [data-action="tags"]')?.click(),
         '/': () => document.getElementById('search-input')?.focus(),
         n: () => document.getElementById('add-input')?.focus(),
       };

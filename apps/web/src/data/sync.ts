@@ -5,6 +5,7 @@ import {
   type Highlight,
   type PrepareUploadResponse,
   type SyncResponse,
+  type Tag,
 } from '@margin/shared';
 import { useSyncExternalStore } from 'react';
 import { api, ApiRequestError } from './api.ts';
@@ -22,6 +23,24 @@ const replaceLocal = (localId: string, saved: Bookmark) =>
   db.transaction('rw', db.bookmarks, async () => {
     if (saved.id !== localId) await db.bookmarks.delete(localId);
     await db.bookmarks.put(saved);
+  });
+
+/** Replaces a locally created tag with the server's tag of the same name, everywhere it's used here. */
+const adoptTag = (localId: string, saved: Tag) =>
+  db.transaction('rw', [db.tags, db.bookmarks, db.outbox], async () => {
+    await db.tags.delete(localId);
+    await db.tags.put(saved);
+    await db.bookmarks.where('tagIds').equals(localId).modify((b) => {
+      b.tagIds = [...new Set(b.tagIds.map((t) => (t === localId ? saved.id : t)))];
+    });
+    // Queued changes that still refer to the local id.
+    await db.outbox.toCollection().modify((entry) => {
+      const op = entry.op;
+      if (op.type === 'bookmark.update') {
+        const swap = (ids?: string[]) => ids?.map((t) => (t === localId ? saved.id : t));
+        op.patch = { ...op.patch, addTagIds: swap(op.patch.addTagIds), removeTagIds: swap(op.patch.removeTagIds) };
+      } else if ((op.type === 'tag.update' || op.type === 'tag.delete') && op.id === localId) op.id = saved.id;
+    });
   });
 
 const send: { [T in OutboxOp['type']]: Sender<T> } = {
@@ -58,6 +77,16 @@ const send: { [T in OutboxOp['type']]: Sender<T> } = {
     await db.folders.put(await api<Folder>('PATCH', `/api/folders/${op.id}`, { name: op.name }));
   },
   'folder.delete': async (op) => api('DELETE', `/api/folders/${op.id}`),
+  // The server answers with the tag it kept: an existing one if another device already made one with this name.
+  'tag.create': async (op) => {
+    const saved = await api<Tag>('POST', '/api/tags', { id: op.id, name: op.name });
+    if (saved.id !== op.id) await adoptTag(op.id, saved);
+    else await db.tags.put(saved);
+  },
+  'tag.update': async (op) => {
+    await db.tags.put(await api<Tag>('PATCH', `/api/tags/${op.id}`, { name: op.name }));
+  },
+  'tag.delete': async (op) => api('DELETE', `/api/tags/${op.id}`),
   'highlight.create': async (op) => {
     await db.highlights.put(
       await api<Highlight>('POST', '/api/highlights', {
@@ -108,22 +137,23 @@ async function flushOutbox() {
 async function pull() {
   const cursor = (await db.meta.get('syncCursor'))?.value ?? 0;
   const res = await api<SyncResponse>('GET', `/api/sync?since=${cursor}`);
-  await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.meta, db.outbox], async () => {
+  await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.tags, db.meta, db.outbox], async () => {
     // Don't overwrite optimistic local edits made while this pull was in flight; their ops are still queued.
     const dirty = new Set((await db.outbox.toArray()).map((e) => e.op.id));
     const clean = <T extends { id: string }>(rows: T[]) => rows.filter((r) => !dirty.has(r.id));
 
     if (res.reset) {
       // Away too long to replay deletions: the response is the whole library, so replace ours with it.
-      for (const table of [db.bookmarks, db.folders, db.highlights]) {
+      for (const table of [db.bookmarks, db.folders, db.highlights, db.tags]) {
         await table.where('id').noneOf([...dirty]).delete();
       }
     }
     await db.bookmarks.bulkPut(clean(res.bookmarks));
     await db.folders.bulkPut(clean(res.folders));
     await db.highlights.bulkPut(clean(res.highlights));
+    await db.tags.bulkPut(clean(res.tags));
     for (const d of res.deletions) {
-      const table = { bookmark: db.bookmarks, folder: db.folders, highlight: db.highlights }[d.entity];
+      const table = { bookmark: db.bookmarks, folder: db.folders, highlight: db.highlights, tag: db.tags }[d.entity];
       await table.delete(d.id);
     }
     await db.meta.put({ key: 'syncCursor', value: res.cursor });

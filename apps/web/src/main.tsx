@@ -46,6 +46,7 @@ const router = createBrowserRouter([
       { path: '/pdfs', element: <ListPage list={{ kind: 'pdfs' }} /> },
       { path: '/videos', element: <ListPage list={{ kind: 'videos' }} /> },
       { path: '/folder/:folderId', element: <ListPage /> },
+      { path: '/tag/:tagId', element: <ListPage /> },
       { path: '/notes', element: <NotesPage /> },
       { path: '/search', element: <SearchPage /> },
       { path: '/settings', element: <SettingsPage /> },

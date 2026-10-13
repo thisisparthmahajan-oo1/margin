@@ -13,11 +13,13 @@ import {
   Play,
   Square,
   StickyNote,
+  Tag,
   Type,
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MoveMenu } from '../components/MoveMenu.tsx';
+import { TagMenu } from '../components/TagMenu.tsx';
 import { Toasts } from '../components/Toasts.tsx';
 import {
   createHighlight,
@@ -41,7 +43,7 @@ import { VideoHeader } from '../reader/VideoHeader.tsx';
 // pdf.js is large; it's only loaded when a PDF's original pages are shown.
 const PdfView = lazy(() => import('../reader/PdfView.tsx'));
 
-type Panel = 'settings' | 'highlights' | 'move' | null;
+type Panel = 'settings' | 'highlights' | 'move' | 'tags' | null;
 /** A PDF reads as extracted text (with highlights, Listen, themes) or as its original pages. */
 type View = 'text' | 'original';
 
@@ -226,6 +228,7 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
           setActiveHighlight(null);
         } else goBack();
       } else if (e.key === 'a') void archiveAndLeave();
+      else if (e.key === 't') setPanel('tags');
       else if (e.key === 'l') void toggleLike(b);
     };
     document.addEventListener('keydown', onKey);
@@ -290,6 +293,17 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
             <Heart size={19} fill={b.likedAt ? 'currentColor' : 'none'} />
           </button>
           <span className="menu-anchor">
+            <button
+              className={`icon-button${b.tagIds.length ? ' tagged' : ''}`}
+              aria-label="Tags"
+              aria-expanded={panel === 'tags'}
+              onClick={() => togglePanel('tags')}
+            >
+              <Tag size={19} />
+            </button>
+            {panel === 'tags' && <TagMenu bookmark={b} onClose={() => setPanel(null)} />}
+          </span>
+          <span className="menu-anchor">
             <button className="icon-button" aria-label="Move to folder" onClick={() => togglePanel('move')}>
               <FolderInput size={19} />
             </button>
@@ -315,7 +329,7 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
 
       <article
         className={`reader-article${showing === 'original' ? ' original' : ''}`}
-        onClick={() => panel && panel !== 'move' && setPanel(null)}
+        onClick={() => panel && panel !== 'move' && panel !== 'tags' && setPanel(null)}
       >
         <header className="article-head">
           <p className="article-source">

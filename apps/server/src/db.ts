@@ -1,4 +1,4 @@
-import { mediaPathsIn, type Bookmark, type Deletion, type Folder, type Highlight } from '@margin/shared';
+import { mediaPathsIn, type Bookmark, type Deletion, type Folder, type Highlight, type Tag } from '@margin/shared';
 import { MongoClient, type Collection, type Db } from 'mongodb';
 
 // Stored shapes: the shared domain types keyed by `_id`, plus server-only fields.
@@ -13,6 +13,7 @@ export interface BookmarkServerFields {
 export type BookmarkDoc = Omit<Bookmark, 'id'> & { _id: string } & BookmarkServerFields;
 export type FolderDoc = Omit<Folder, 'id'> & { _id: string };
 export type HighlightDoc = Omit<Highlight, 'id'> & { _id: string };
+export type TagDoc = Omit<Tag, 'id'> & { _id: string };
 /** `expiresAt` drives a TTL index: deletion records only need to live long enough for devices to sync them. */
 export type DeletionDoc = Deletion & { _id: string; expiresAt: Date };
 /**
@@ -31,6 +32,7 @@ export interface Collections {
   bookmarks: Collection<BookmarkDoc>;
   folders: Collection<FolderDoc>;
   highlights: Collection<HighlightDoc>;
+  tags: Collection<TagDoc>;
   deletions: Collection<DeletionDoc>;
   uploads: Collection<UploadDoc>;
 }
@@ -41,10 +43,14 @@ export function collections(db: Db): Collections {
     bookmarks: db.collection<BookmarkDoc>('bookmarks'),
     folders: db.collection<FolderDoc>('folders'),
     highlights: db.collection<HighlightDoc>('highlights'),
+    tags: db.collection<TagDoc>('tags'),
     deletions: db.collection<DeletionDoc>('deletions'),
     uploads: db.collection<UploadDoc>('uploads'),
   };
 }
+
+/** Case-insensitive comparison for tag names. */
+export const TAG_NAME_COLLATION = { locale: 'en', strength: 2 } as const;
 
 export async function ensureIndexes(c: Collections) {
   await Promise.all([
@@ -53,11 +59,15 @@ export async function ensureIndexes(c: Collections) {
     c.bookmarks.createIndex({ status: 1, updatedAt: 1 }),
     c.bookmarks.createIndex({ mediaPaths: 1 }),
     c.bookmarks.createIndex({ 'file.key': 1 }, { sparse: true }),
+    c.bookmarks.createIndex({ tagIds: 1 }),
     c.bookmarks.createIndex(
       { title: 'text', siteName: 'text', plainText: 'text' },
       { name: 'bookmarks_text', weights: { title: 10, siteName: 3, plainText: 1 }, default_language: 'english' },
     ),
     c.folders.createIndex({ updatedAt: 1 }),
+    c.tags.createIndex({ updatedAt: 1 }),
+    // One tag per name, ignoring case ("Later" and "later" are the same tag).
+    c.tags.createIndex({ name: 1 }, { unique: true, collation: TAG_NAME_COLLATION }),
     c.highlights.createIndex({ updatedAt: 1 }),
     c.highlights.createIndex({ bookmarkId: 1 }),
     c.deletions.createIndex({ deletedAt: 1 }),
@@ -77,6 +87,7 @@ export async function backfill(c: Collections) {
     { kind: { $exists: false } },
     { $set: { kind: 'article', hasVideo: false, file: null, video: null } },
   );
+  await c.bookmarks.updateMany({ tagIds: { $exists: false } }, { $set: { tagIds: [] } });
 }
 
 /**

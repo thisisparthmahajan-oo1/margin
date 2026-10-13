@@ -30,6 +30,7 @@ export const bookmarkRoutes = new Hono<AppEnv>()
     const { store } = c.var.deps;
     const patch = await c.req.json<UpdateBookmarkRequest>();
     if (patch.folderId && !(await store.getFolder(patch.folderId))) return c.json({ error: 'Unknown folder' }, 400);
+    if (patch.addTagIds?.length && !(await store.tagsExist(patch.addTagIds))) return c.json({ error: 'Unknown tag' }, 400);
     const bookmark = await store.updateBookmark(c.req.param('id'), patch);
     return bookmark ? c.json(bookmark) : c.json({ error: 'Not found' }, 404);
   })

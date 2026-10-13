@@ -1,12 +1,20 @@
-import { isInList, sortComparators, type Bookmark, type ListKey, type SortKey } from '@margin/shared';
+import { filterByTag, isInList, sortComparators, type Bookmark, type ListKey, type SortKey } from '@margin/shared';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db.ts';
 
-export const useBookmarks = (list: ListKey, sort: SortKey) =>
-  useLiveQuery(
-    async () => (await db.bookmarks.toArray()).filter((b) => isInList(b, list)).sort(sortComparators[sort]),
-    [JSON.stringify(list), sort],
-  );
+/** A list's items, optionally narrowed to one tag. Also returns the list's tags (before narrowing), for the filter. */
+export const useBookmarks = (list: ListKey, sort: SortKey, tagId: string | null = null) =>
+  useLiveQuery(async () => {
+    const inList = (await db.bookmarks.toArray()).filter((b) => isInList(b, list));
+    return {
+      items: filterByTag(inList, tagId).sort(sortComparators[sort]),
+      tagIds: new Set(inList.flatMap((b) => b.tagIds)),
+    };
+  }, [JSON.stringify(list), sort, tagId]);
+
+/** All tags, alphabetically. */
+export const useTags = () =>
+  useLiveQuery(async () => (await db.tags.toArray()).sort((a, b) => a.name.localeCompare(b.name)), []) ?? [];
 
 export const useBookmark = (id: string | undefined) =>
   useLiveQuery(async () => (id ? ((await db.bookmarks.get(id)) ?? null) : null), [id]);

@@ -46,6 +46,8 @@ export interface Bookmark {
   file: StoredFile | null;
   /** kind 'video': what the player needs. */
   video: VideoRef | null;
+  /** Tags on this item (any number, independent of its folder). */
+  tagIds: string[];
   folderId: string | null;
   likedAt: number | null;
   archivedAt: number | null;
@@ -59,6 +61,14 @@ export interface Folder {
   id: string;
   name: string;
   position: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A label for where an item stands, e.g. "don't understand yet". Unlike folders, an item can have many. */
+export interface Tag {
+  id: string;
+  name: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -79,7 +89,7 @@ export interface Highlight {
   updatedAt: number;
 }
 
-export type EntityName = 'bookmark' | 'folder' | 'highlight';
+export type EntityName = 'bookmark' | 'folder' | 'highlight' | 'tag';
 
 export interface Deletion {
   entity: EntityName;
@@ -95,13 +105,14 @@ export type ListKey =
   | { kind: 'archive' }
   | { kind: 'pdfs' }
   | { kind: 'videos' }
-  | { kind: 'folder'; folderId: string };
+  | { kind: 'folder'; folderId: string }
+  | { kind: 'tag'; tagId: string };
 
 export type SortKey = 'newest' | 'oldest' | 'shortest' | 'longest';
 
 /** The single definition of list membership, used by server queries and client filtering alike. */
 export function isInList(
-  b: Pick<Bookmark, 'archivedAt' | 'likedAt' | 'folderId' | 'kind' | 'hasVideo'>,
+  b: Pick<Bookmark, 'archivedAt' | 'likedAt' | 'folderId' | 'kind' | 'hasVideo' | 'tagIds'>,
   list: ListKey,
 ): boolean {
   switch (list.kind) {
@@ -117,8 +128,14 @@ export function isInList(
       return b.archivedAt === null && b.hasVideo;
     case 'folder':
       return b.archivedAt === null && b.folderId === list.folderId;
+    case 'tag':
+      return b.archivedAt === null && b.tagIds.includes(list.tagId);
   }
 }
+
+/** Narrows any list to items with a tag (e.g. a folder's "don't understand yet" items). No tag: unchanged. */
+export const filterByTag = <T extends Pick<Bookmark, 'tagIds'>>(items: T[], tagId: string | null): T[] =>
+  tagId ? items.filter((b) => b.tagIds.includes(tagId)) : items;
 
 export const sortComparators: Record<SortKey, (a: Bookmark, b: Bookmark) => number> = {
   newest: (a, b) => b.savedAt - a.savedAt,
@@ -181,6 +198,18 @@ export interface UpdateBookmarkRequest {
   archived?: boolean;
   folderId?: string | null;
   progress?: number;
+  /**
+   * Tags are added and removed rather than replaced, so tagging an item on two devices at once
+   * merges instead of one change overwriting the other.
+   */
+  addTagIds?: string[];
+  removeTagIds?: string[];
+}
+
+/** Applies a tag change to an item's tags; the server and devices both use this. */
+export function applyTagChange(tagIds: string[], patch: Pick<UpdateBookmarkRequest, 'addTagIds' | 'removeTagIds'>): string[] {
+  const removed = new Set(patch.removeTagIds ?? []);
+  return [...new Set([...tagIds, ...(patch.addTagIds ?? [])])].filter((id) => !removed.has(id));
 }
 
 export interface CreateFolderRequest {
@@ -191,6 +220,15 @@ export interface CreateFolderRequest {
 export interface UpdateFolderRequest {
   name?: string;
   position?: number;
+}
+
+export interface CreateTagRequest {
+  id?: string;
+  name: string;
+}
+
+export interface UpdateTagRequest {
+  name: string;
 }
 
 export interface CreateHighlightRequest {
@@ -215,6 +253,7 @@ export interface SyncResponse {
   bookmarks: Bookmark[];
   folders: Folder[];
   highlights: Highlight[];
+  tags: Tag[];
   deletions: Deletion[];
 }
 

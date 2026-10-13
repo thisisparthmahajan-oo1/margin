@@ -1,4 +1,4 @@
-import type { Bookmark, Folder, Highlight, UpdateBookmarkRequest, TextQuoteAnchor } from '@margin/shared';
+import type { Bookmark, Folder, Highlight, Tag, UpdateBookmarkRequest, TextQuoteAnchor } from '@margin/shared';
 import Dexie, { type EntityTable } from 'dexie';
 
 /** A change made on this device that the server hasn't acknowledged yet. Flushed in `seq` order. */
@@ -12,6 +12,9 @@ export type OutboxOp =
   | { type: 'folder.create'; id: string; name: string }
   | { type: 'folder.update'; id: string; name: string }
   | { type: 'folder.delete'; id: string }
+  | { type: 'tag.create'; id: string; name: string }
+  | { type: 'tag.update'; id: string; name: string }
+  | { type: 'tag.delete'; id: string }
   | { type: 'highlight.create'; id: string; bookmarkId: string; anchor: TextQuoteAnchor; note: string | null }
   | { type: 'highlight.update'; id: string; note: string | null }
   | { type: 'highlight.delete'; id: string };
@@ -42,6 +45,7 @@ interface Meta {
 export const db = new Dexie('margin') as Dexie & {
   bookmarks: EntityTable<Bookmark, 'id'>;
   folders: EntityTable<Folder, 'id'>;
+  tags: EntityTable<Tag, 'id'>;
   highlights: EntityTable<Highlight, 'id'>;
   outbox: EntityTable<OutboxEntry, 'seq'>;
   meta: EntityTable<Meta, 'key'>;
@@ -73,5 +77,19 @@ db.version(3)
         b.hasVideo ??= false;
         b.file ??= null;
         b.video ??= null;
+      }),
+  );
+
+db.version(4)
+  .stores({
+    bookmarks: 'id, canonicalUrl, savedAt, updatedAt, status, *tagIds',
+    tags: 'id, name',
+  })
+  .upgrade((tx) =>
+    tx
+      .table<Bookmark>('bookmarks')
+      .toCollection()
+      .modify((b) => {
+        b.tagIds ??= [];
       }),
   );

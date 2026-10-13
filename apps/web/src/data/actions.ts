@@ -1,4 +1,5 @@
 import {
+  applyTagChange,
   fileKeyFor,
   PDF_CONTENT_TYPE,
   uploadUrlFor,
@@ -17,7 +18,7 @@ import { syncNow } from './sync.ts';
  * Works the same online and offline.
  */
 async function commit(apply: () => Promise<unknown>, ...ops: OutboxOp[]) {
-  await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.outbox], async () => {
+  await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.tags, db.outbox], async () => {
     await apply();
     for (const op of ops) await db.outbox.add({ op });
   });
@@ -30,7 +31,7 @@ const placeholder = (fields: Pick<Bookmark, 'id' | 'url' | 'source'> & Partial<B
   return {
     canonicalUrl: fields.url, kind: 'article', status: 'pending', error: null, title: null, byline: null,
     siteName: null, excerpt: null, leadImage: null, contentHtml: null, wordCount: 0, publishedAt: null,
-    hasVideo: false, file: null, video: null, folderId: null, likedAt: null, archivedAt: null, progress: 0,
+    hasVideo: false, file: null, video: null, tagIds: [], folderId: null, likedAt: null, archivedAt: null, progress: 0,
     progressUpdatedAt: null, savedAt: now, updatedAt: now,
     ...fields,
   };
@@ -96,6 +97,7 @@ export async function updateBookmark(id: string, patch: UpdateBookmarkRequest) {
           b.progress = patch.progress;
           b.progressUpdatedAt = now;
         }
+        if (patch.addTagIds || patch.removeTagIds) b.tagIds = applyTagChange(b.tagIds, patch);
       }),
     { type: 'bookmark.update', id, patch },
   );
@@ -156,6 +158,35 @@ export async function deleteFolder(id: string) {
     await db.folders.delete(id);
   }, { type: 'folder.delete', id });
 }
+
+// ---- tags ----
+
+/** Creates a tag, or returns the existing one with that name (ignoring case), as the server does. */
+export async function createTag(name: string): Promise<string> {
+  const clean = name.trim().replace(/\s+/g, ' ');
+  const existing = (await db.tags.toArray()).find((t) => t.name.toLowerCase() === clean.toLowerCase());
+  if (existing) return existing.id;
+  const now = Date.now();
+  const id = crypto.randomUUID();
+  await commit(() => db.tags.put({ id, name: clean, createdAt: now, updatedAt: now }), { type: 'tag.create', id, name: clean });
+  return id;
+}
+
+export const renameTag = (id: string, name: string) =>
+  commit(() => db.tags.update(id, { name: name.trim() }), { type: 'tag.update', id, name: name.trim() });
+
+/** Removes the tag from every item and deletes it. */
+export async function deleteTag(id: string) {
+  await commit(async () => {
+    await db.bookmarks.where('tagIds').equals(id).modify((b) => {
+      b.tagIds = b.tagIds.filter((t) => t !== id);
+    });
+    await db.tags.delete(id);
+  }, { type: 'tag.delete', id });
+}
+
+export const setTag = (b: Bookmark, tagId: string, on: boolean) =>
+  updateBookmark(b.id, on ? { addTagIds: [tagId] } : { removeTagIds: [tagId] });
 
 export async function createHighlight(bookmarkId: string, anchor: TextQuoteAnchor, note: string | null = null) {
   const now = Date.now();

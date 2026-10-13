@@ -1,25 +1,17 @@
 import type { Bookmark } from '@margin/shared';
 import { Check } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { createFolder, moveToFolder } from '../data/actions.ts';
 import { useFolders } from '../data/queries.ts';
 import { toast } from '../data/toast.ts';
+import { useDismiss } from './useDismiss.ts';
 
 export function MoveMenu({ bookmark, onClose }: { bookmark: Bookmark; onClose: () => void }) {
   const folders = useFolders();
   const ref = useRef<HTMLDivElement>(null);
   const [newName, setNewName] = useState('');
 
-  useEffect(() => {
-    const onDown = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [onClose]);
+  useDismiss(ref, onClose);
 
   const move = async (folderId: string | null, label: string) => {
     await moveToFolder(bookmark, folderId);
