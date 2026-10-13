@@ -156,7 +156,9 @@ export function ListPage({ list: fixedList }: { list?: ListKey }) {
         <p className="empty">{filterTagId ? 'Nothing in this list has that tag.' : EMPTY[list.kind]}</p>
       )}
       <div className="rows">
-        {items?.map((b, i) => <BookmarkRow key={b.id} bookmark={b} selected={i === selected} />)}
+        {items?.map((b, i) => (
+          <BookmarkRow key={b.id} bookmark={b} selected={i === selected} showFolder={list.kind !== 'folder'} />
+        ))}
       </div>
     </section>
   );

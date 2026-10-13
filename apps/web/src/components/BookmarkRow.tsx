@@ -1,9 +1,9 @@
 import { lengthLabel, type Bookmark, type BookmarkSource } from '@margin/shared';
-import { Archive, ArchiveRestore, FolderInput, Heart, RotateCw, Tag, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Folder, FolderInput, Heart, RotateCw, Tag, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteBookmark, retryBookmark, toggleArchive, toggleLike, updateBookmark } from '../data/actions.ts';
-import { canOpen, domainOf, useTags } from '../data/queries.ts';
+import { canOpen, domainOf, useFolders, useTags } from '../data/queries.ts';
 import { toast } from '../data/toast.ts';
 import { MediaImg } from './MediaImg.tsx';
 import { MoveMenu } from './MoveMenu.tsx';
@@ -30,10 +30,22 @@ export function originOf(b: Bookmark): string {
   }
 }
 
-export function BookmarkRow({ bookmark: b, selected, snippet }: { bookmark: Bookmark; selected?: boolean; snippet?: ReactNode }) {
+export function BookmarkRow({
+  bookmark: b,
+  selected,
+  snippet,
+  showFolder = true,
+}: {
+  bookmark: Bookmark;
+  selected?: boolean;
+  snippet?: ReactNode;
+  /** Off on the folder's own page, where it would only repeat the title. */
+  showFolder?: boolean;
+}) {
   const [moving, setMoving] = useState(false);
   const [tagging, setTagging] = useState(false);
   const tags = useTags().filter((t) => b.tagIds.includes(t.id));
+  const folder = useFolders().find((f) => showFolder && f.id === b.folderId);
 
   const archive = async () => {
     await toggleArchive(b);
@@ -53,6 +65,12 @@ export function BookmarkRow({ bookmark: b, selected, snippet }: { bookmark: Book
         {lengthLabel(b) && <span>{lengthLabel(b)}</span>}
         {b.hasVideo && b.kind !== 'video' && <span className="tag">Video</span>}
         {b.progress > 0.02 && b.progress < 0.98 && <span>{Math.round(b.progress * 100)}% read</span>}
+        {folder && (
+          <Link className="tag-chip folder-chip" to={`/folder/${folder.id}`} title="Folder">
+            <Folder size={11} aria-hidden />
+            {folder.name}
+          </Link>
+        )}
         {tags.map((t) => (
           <Link key={t.id} className="tag-chip" to={`/tag/${t.id}`}>
             {t.name}

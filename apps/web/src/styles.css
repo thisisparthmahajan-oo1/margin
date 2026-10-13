@@ -1407,3 +1407,9 @@ a.row-link:hover .row-title {
   border-color: var(--ink);
   color: var(--paper);
 }
+.folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-style: dashed;
+}
