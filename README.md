@@ -142,6 +142,14 @@ X posts and Articles that contain videos are labelled **Video**; they stream fro
 
 x.com shows nothing without a login, so X posts are read through the public [FxTwitter API](https://github.com/FxEmbed/FxEmbed). Article bodies are converted from X's rich-text blocks into clean HTML (`apps/server/src/extractors/x-article.ts`). Paste the **post link** (`x.com/<user>/status/<id>`). Regular posts are saved too, as short text.
 
+## Planned
+
+- **Tags**, alongside folders. Mark items with how they're going, for example *"don't understand this yet"* inside a folder, and filter by tag.
+- YouTube transcripts (searchable, readable offline).
+- Cleanup and OCR for messy or scanned PDFs.
+- Highlights on a PDF's original pages.
+- Chrome extension.
+
 ## How it's built
 
 ```
