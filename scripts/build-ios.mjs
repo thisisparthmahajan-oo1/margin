@@ -1,10 +1,11 @@
 // Builds the iOS app pointed at a Margin server and installs it.
 //
 //   MARGIN_API_URL=https://marginr.vercel.app npm run ios:sim      # iPhone simulator
-//   MARGIN_API_URL=https://marginr.vercel.app npm run ios:device   # your iPhone (re-run every 7 days)
+//   MARGIN_API_URL=https://marginr.vercel.app npm run ios:device   # your iPhone
 //
 // Signing uses the free Apple ID team set in apps/ios (DEVELOPMENT_TEAM), with automatic
-// provisioning; free-team builds stop opening after 7 days until reinstalled.
+// provisioning; free-team builds stop opening after 7 days. After a device install, the build is handed to
+// ios-app-renewer (~/projects/claude/custom-tools-for-terminal), which keeps it renewed.
 // Options: MARGIN_IOS_SIMULATOR (default "iPhone 17"), MARGIN_IOS_DEVICE (default: first paired iPhone).
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -57,10 +58,25 @@ if (target === 'sim') {
   const app = path.join(derived, 'Build/Products/Release-iphoneos/App.app');
   run(`xcrun devicectl device install app --device ${device.identifier} "${app}"`);
   run(`xcrun devicectl device process launch --device ${device.identifier} ${BUNDLE_ID}`);
-  console.log(`\nInstalled on "${device.name}" → ${apiUrl}. Free Apple ID builds expire in 7 days; re-run to renew.`);
+  console.log(`\nInstalled on "${device.name}" → ${apiUrl}.`);
+  keepRenewed(app);
 }
 
 /** A paired, reachable iPhone (USB or same Wi-Fi), by name or the first one found. */
+/**
+ * Free Apple ID builds stop opening after 7 days. ios-app-renewer (a launchd job on this Mac) re-signs and
+ * reinstalls the installed build daily while the phone is on the same Wi-Fi; this hands it the new build.
+ */
+function keepRenewed(app) {
+  const renewer = path.join(os.homedir(), 'projects/claude/custom-tools-for-terminal/ios-app-renewer/renew.mjs');
+  if (!fs.existsSync(renewer)) {
+    console.log('Free Apple ID builds expire in 7 days; re-run to renew.');
+    return;
+  }
+  run(`node "${renewer}" adopt ${BUNDLE_ID} "${app}"`);
+  console.log('ios-app-renewer will keep this build from expiring (renewed daily when the phone is on the same Wi-Fi).');
+}
+
 function findDevice(wanted) {
   const out = path.join(os.tmpdir(), `margin-devices-${process.pid}.json`);
   read(`xcrun devicectl list devices --json-output "${out}" --quiet`);

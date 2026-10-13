@@ -95,7 +95,7 @@ MARGIN_API_URL=https://marginr.vercel.app npm run ios:device   # build + install
 
 - **Device install:** connect the iPhone by cable (or the same Wi-Fi once paired) and unlock it. If the phone says *Untrusted Developer*, trust the team once: *Settings → General → VPN & Device Management*. Pick a specific phone with `MARGIN_IOS_DEVICE="Parth Phone"`.
 - **Free Apple ID limits:**
-  - The app stops opening after **7 days**. Re-run `npm run ios:device` to renew it; your library and sign-in stay.
+  - Builds stop opening after **7 days**. On this Mac, **ios-app-renewer** (`~/projects/claude/custom-tools-for-terminal/ios-app-renewer`) handles that automatically: it's a launchd job that re-signs and reinstalls the installed build about once a day whenever the iPhone is on the same Wi-Fi. `npm run ios:device` hands each new build to it. Your library and sign-in stay.
   - No TestFlight.
   - No share-sheet extension for links. Instead, when you open Margin after copying a link, it offers **"Save the link you copied?"**. This uses `packages/capacitor-clipboard-link`. iOS asks "Allow Paste" only when you tap Save.
   - **PDFs can be shared to Margin** from Files, Mail or Safari (*Share → Margin*). This works even on the free team, because Margin declares that it opens PDFs; it doesn't need an extension.
