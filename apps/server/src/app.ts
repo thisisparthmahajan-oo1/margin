@@ -20,6 +20,8 @@ import { createSession, isValidSession, safeEqual } from './session.ts';
  * Reachable without credentials: health checks, images (unguessable content-hash names, loaded by
  * <img>), and signing in. Everything else needs `Authorization: Bearer <session or APP_TOKEN>`.
  */
+const R2_SETTINGS = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'];
+
 const PUBLIC_API = ['/api/health', '/api/media/*', '/api/session/signin'];
 
 export interface AppOptions {
@@ -61,17 +63,19 @@ export function createApp(opts: AppOptions) {
   // Behind auth: 200 means the current credentials are still accepted.
   app.get('/api/session', (c) => c.json({ ok: true }));
 
-  // Behind auth: is the database reachable? Reports the config in use and the driver's error, never credentials.
+  // Behind auth: is the database reachable, and which settings does the server see? Never reports secret values.
   app.get('/api/status', async (c) => {
     const uri = process.env.MONGODB_URI;
     const host = (uri ?? 'mongodb://127.0.0.1:27017 (default: MONGODB_URI not set)').replace(/\/\/[^@/]*@/, '//***@');
+    const r2 = Object.fromEntries(R2_SETTINGS.map((name) => [name, process.env[name]?.trim() ? 'set' : 'missing']));
+    const settings = { mongodbUriSet: Boolean(uri), host, r2, r2Bucket: process.env.R2_BUCKET?.trim() || null };
     try {
       await opts.deps();
-      return c.json({ db: 'ok', mongodbUriSet: Boolean(uri), host });
+      return c.json({ db: 'ok', ...settings });
     } catch (e) {
       const err = e as Error;
       const message = `${err.name}: ${err.message}`.replace(/\/\/[^@/\s]*@/g, '//***@');
-      return c.json({ db: 'error', mongodbUriSet: Boolean(uri), host, error: message.slice(0, 500) }, 503);
+      return c.json({ db: 'error', ...settings, error: message.slice(0, 500) }, 503);
     }
   });
 
