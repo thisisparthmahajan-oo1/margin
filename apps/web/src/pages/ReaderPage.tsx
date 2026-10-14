@@ -19,6 +19,7 @@ import {
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MoveMenu } from '../components/MoveMenu.tsx';
+import { RelevanceButtons } from '../components/RelevanceButtons.tsx';
 import { TagMenu } from '../components/TagMenu.tsx';
 import { Toasts } from '../components/Toasts.tsx';
 import {
@@ -284,6 +285,7 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
               <Headphones size={19} />
             </button>
           )}
+          <RelevanceButtons bookmark={b} size={19} />
           <button
             className={`icon-button${b.likedAt ? ' liked' : ''}`}
             aria-label={b.likedAt ? 'Unlike' : 'Like'}

@@ -88,6 +88,25 @@ describe('curator API', () => {
     expect((await post({ suggestion: { reason: 'x'.repeat(300) } })).status).toBe(201);
   });
 
+  it('relevance: set, change and clear; independent of like and archive', async () => {
+    const { bookmark: b } = await store().saveBookmark({ url: 'https://example.com/r', canonicalUrl: 'https://example.com/r', source: 'web' });
+    expect(b).toMatchObject({ relevance: null, relevanceAt: null });
+    const patch = async (body: object) => (await send('owner-secret', 'PATCH', `/api/bookmarks/${b.id}`, body)).json() as Promise<Bookmark>;
+
+    const relevant = await patch({ relevance: 'relevant' });
+    expect(relevant.relevance).toBe('relevant');
+    expect(relevant.relevanceAt).toBeGreaterThan(0);
+    expect(await patch({ liked: true, archived: true })).toMatchObject({ relevance: 'relevant' });
+    const changed = await patch({ relevance: 'not_relevant' });
+    expect(changed).toMatchObject({ relevance: 'not_relevant', likedAt: expect.any(Number), archivedAt: expect.any(Number) });
+    const cleared = await patch({ relevance: null });
+    expect(cleared.relevance).toBeNull();
+    expect(cleared.relevanceAt).toBeGreaterThanOrEqual(changed.relevanceAt!);
+    expect(cleared.likedAt).not.toBeNull();
+
+    expect((await send('owner-secret', 'PATCH', `/api/bookmarks/${b.id}`, { relevance: 'meh' })).status).toBe(400);
+  });
+
   it('API_TOKENS parses name=secret pairs and refuses weak or malformed ones', () => {
     expect(parseApiTokens('')).toEqual({});
     expect(parseApiTokens(` curator=${CURATOR} , other=${CURATOR}x`)).toEqual({ curator: CURATOR, other: `${CURATOR}x` });

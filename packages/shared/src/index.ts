@@ -50,6 +50,10 @@ export interface Bookmark {
   tagIds: string[];
   /** Set when something other than you added the item (the Daily Curator); null for items you saved. */
   suggestion: Suggestion | null;
+  /** Your verdict on whether an item was worth suggesting. Separate from like, archive and delete. */
+  relevance: Relevance | null;
+  /** When `relevance` last changed, including being cleared. */
+  relevanceAt: number | null;
   folderId: string | null;
   likedAt: number | null;
   archivedAt: number | null;
@@ -68,6 +72,9 @@ export interface Suggestion {
 }
 
 export const SUGGESTION_REASON_MAX = 300;
+
+export const RELEVANCE_VALUES = ['relevant', 'not_relevant'] as const;
+export type Relevance = (typeof RELEVANCE_VALUES)[number];
 
 export interface Folder {
   id: string;
@@ -228,6 +235,8 @@ export interface UpdateBookmarkRequest {
    */
   addTagIds?: string[];
   removeTagIds?: string[];
+  /** null clears it. */
+  relevance?: Relevance | null;
 }
 
 /** Applies a tag change to an item's tags; the server and devices both use this. */

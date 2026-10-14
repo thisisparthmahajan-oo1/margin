@@ -104,3 +104,15 @@ db.version(5)
         b.suggestion ??= null;
       }),
   );
+
+db.version(6)
+  .stores({})
+  .upgrade((tx) =>
+    tx
+      .table<Bookmark>('bookmarks')
+      .toCollection()
+      .modify((b) => {
+        b.relevance ??= null;
+        b.relevanceAt ??= null;
+      }),
+  );

@@ -7,6 +7,7 @@ import { canOpen, domainOf, useFolders, useTags } from '../data/queries.ts';
 import { toast } from '../data/toast.ts';
 import { MediaImg } from './MediaImg.tsx';
 import { MoveMenu } from './MoveMenu.tsx';
+import { RelevanceButtons } from './RelevanceButtons.tsx';
 import { TagMenu } from './TagMenu.tsx';
 
 const PENDING: Record<BookmarkSource, string> = {
@@ -114,6 +115,7 @@ export function BookmarkRow({
                   <RotateCw size={16} />
                 </button>
               )}
+              {b.suggestion && <RelevanceButtons bookmark={b} size={16} />}
               <button
                 className={`icon-button${b.likedAt ? ' liked' : ''}`}
                 aria-label={b.likedAt ? 'Unlike' : 'Like'}

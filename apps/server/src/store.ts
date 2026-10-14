@@ -172,6 +172,8 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         video: null,
         tagIds: input.tagIds ?? [],
         suggestion: input.suggestion ?? null,
+        relevance: null,
+        relevanceAt: null,
         folderId: input.folderId ?? null,
         likedAt: null,
         archivedAt: null,
@@ -220,6 +222,10 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       if (patch.liked !== undefined) set.likedAt = patch.liked ? (current.likedAt ?? t) : null;
       if (patch.archived !== undefined) set.archivedAt = patch.archived ? (current.archivedAt ?? t) : null;
       if (patch.folderId !== undefined) set.folderId = patch.folderId;
+      if (patch.relevance !== undefined) {
+        set.relevance = patch.relevance;
+        set.relevanceAt = t;
+      }
       if (patch.progress !== undefined) {
         set.progress = Math.min(1, Math.max(0, patch.progress));
         set.progressUpdatedAt = t;

@@ -1393,6 +1393,12 @@ a.row-link:hover .row-title {
 .tag-chip:hover {
   border-color: var(--ink-3);
 }
+.relevance {
+  display: inline-flex;
+}
+.icon-button.chosen {
+  color: var(--margin);
+}
 .icon-button.tagged {
   color: var(--margin);
 }

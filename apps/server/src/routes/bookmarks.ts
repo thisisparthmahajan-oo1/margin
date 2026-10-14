@@ -1,4 +1,5 @@
 import {
+  RELEVANCE_VALUES,
   SUGGESTION_REASON_MAX,
   type AlreadySavedResponse,
   type CreateBookmarkRequest,
@@ -53,6 +54,9 @@ export const bookmarkRoutes = new Hono<AppEnv>()
     const patch = await c.req.json<UpdateBookmarkRequest>();
     const invalid = await invalidPlacement(store, patch.folderId, patch.addTagIds);
     if (invalid) return c.json({ error: invalid }, 400);
+    if (patch.relevance != null && !RELEVANCE_VALUES.includes(patch.relevance)) {
+      return c.json({ error: `relevance must be ${RELEVANCE_VALUES.join(', ')} or null` }, 400);
+    }
     const bookmark = await store.updateBookmark(c.req.param('id'), patch);
     return bookmark ? c.json(bookmark) : c.json({ error: 'Not found' }, 404);
   })

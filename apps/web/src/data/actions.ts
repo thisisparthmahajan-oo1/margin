@@ -5,6 +5,7 @@ import {
   uploadUrlFor,
   type Bookmark,
   type BookmarkSource,
+  type Relevance,
   type TextQuoteAnchor,
   type UpdateBookmarkRequest,
 } from '@margin/shared';
@@ -31,7 +32,7 @@ const placeholder = (fields: Pick<Bookmark, 'id' | 'url' | 'source'> & Partial<B
   return {
     canonicalUrl: fields.url, kind: 'article', status: 'pending', error: null, title: null, byline: null,
     siteName: null, excerpt: null, leadImage: null, contentHtml: null, wordCount: 0, publishedAt: null,
-    hasVideo: false, file: null, video: null, tagIds: [], suggestion: null, folderId: null, likedAt: null, archivedAt: null, progress: 0,
+    hasVideo: false, file: null, video: null, tagIds: [], suggestion: null, relevance: null, relevanceAt: null, folderId: null, likedAt: null, archivedAt: null, progress: 0,
     progressUpdatedAt: null, savedAt: now, updatedAt: now,
     ...fields,
   };
@@ -93,6 +94,10 @@ export async function updateBookmark(id: string, patch: UpdateBookmarkRequest) {
         if (patch.liked !== undefined) b.likedAt = patch.liked ? (b.likedAt ?? now) : null;
         if (patch.archived !== undefined) b.archivedAt = patch.archived ? (b.archivedAt ?? now) : null;
         if (patch.folderId !== undefined) b.folderId = patch.folderId;
+        if (patch.relevance !== undefined) {
+          b.relevance = patch.relevance;
+          b.relevanceAt = now;
+        }
         if (patch.progress !== undefined) {
           b.progress = patch.progress;
           b.progressUpdatedAt = now;
@@ -104,6 +109,9 @@ export async function updateBookmark(id: string, patch: UpdateBookmarkRequest) {
 }
 
 export const toggleLike = (b: Bookmark) => updateBookmark(b.id, { liked: b.likedAt === null });
+/** Choosing the current verdict again clears it. */
+export const setRelevance = (b: Bookmark, relevance: Relevance) =>
+  updateBookmark(b.id, { relevance: b.relevance === relevance ? null : relevance });
 export const toggleArchive = (b: Bookmark) => updateBookmark(b.id, { archived: b.archivedAt === null });
 export const moveToFolder = (b: Bookmark, folderId: string | null) =>
   updateBookmark(b.id, { folderId, archived: false });
