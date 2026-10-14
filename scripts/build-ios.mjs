@@ -57,12 +57,15 @@ if (target === 'sim') {
   xcodebuild(`-configuration Release -destination "id=${device.udid}" -allowProvisioningUpdates`);
   const app = path.join(derived, 'Build/Products/Release-iphoneos/App.app');
   run(`xcrun devicectl device install app --device ${device.identifier} "${app}"`);
-  run(`xcrun devicectl device process launch --device ${device.identifier} ${BUNDLE_ID}`);
   console.log(`\nInstalled on "${device.name}" → ${apiUrl}.`);
   keepRenewed(app);
+  try {
+    run(`xcrun devicectl device process launch --device ${device.identifier} ${BUNDLE_ID}`);
+  } catch {
+    console.log('Couldn’t open it on the phone (it’s probably locked); open Margin yourself.');
+  }
 }
 
-/** A paired, reachable iPhone (USB or same Wi-Fi), by name or the first one found. */
 /**
  * Free Apple ID builds stop opening after 7 days. ios-app-renewer (a launchd job on this Mac) re-signs and
  * reinstalls the installed build daily while the phone is on the same Wi-Fi; this hands it the new build.
@@ -77,6 +80,7 @@ function keepRenewed(app) {
   console.log('ios-app-renewer will keep this build from expiring (renewed daily when the phone is on the same Wi-Fi).');
 }
 
+/** A paired, reachable iPhone (USB or same Wi-Fi), by name or the first one found. */
 function findDevice(wanted) {
   const out = path.join(os.tmpdir(), `margin-devices-${process.pid}.json`);
   read(`xcrun devicectl list devices --json-output "${out}" --quiet`);
