@@ -134,7 +134,23 @@ async function flushOutbox() {
 
 // ---- pull ----
 
+/** A safety stop for paging; a large first sync needs a handful of pages. */
+const MAX_PAGES = 50;
+
+/** Pulls remote changes, page after page until caught up (a big library's first sync comes in several). */
 async function pull() {
+  let removed = false;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { more, removedItems } = await pullPage();
+    removed ||= removedItems;
+    if (!more) break;
+  }
+  // After the last page: a reset's first page drops items that later pages bring back with the same images.
+  if (removed) await Promise.all([pruneMedia(), pruneFiles()]);
+}
+
+/** Applies one page of changes. Returns whether more are waiting, and whether items were removed. */
+async function pullPage(): Promise<{ more: boolean; removedItems: boolean }> {
   const cursor = (await db.meta.get('syncCursor'))?.value ?? 0;
   const res = await api<SyncResponse>('GET', `/api/sync?since=${cursor}`);
   await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.tags, db.meta, db.outbox], async () => {
@@ -159,9 +175,9 @@ async function pull() {
     }
     await db.meta.put({ key: 'syncCursor', value: res.cursor });
   });
-  if (res.reset || res.deletions.some((d) => d.entity === 'bookmark')) await Promise.all([pruneMedia(), pruneFiles()]);
   void downloadMissingMedia(res.bookmarks);
   void downloadMissingFiles(res.bookmarks);
+  return { more: res.more === true, removedItems: res.reset || res.deletions.some((d) => d.entity === 'bookmark') };
 }
 
 // ---- status + scheduling ----

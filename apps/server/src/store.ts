@@ -27,6 +27,8 @@ import type { MediaStore } from './media.ts';
  * re-delivered rows are harmless because clients upsert by id.
  */
 export const SYNC_OVERLAP_MS = 10_000;
+/** About how much item data one sync response carries (Vercel refuses responses over 4.5 MB). */
+export const SYNC_PAGE_BYTES = 3_000_000;
 const STALE_PENDING_MS = 2 * 60_000;
 /** An upload reservation older than this was abandoned (signed upload URLs last 10 minutes). */
 const ABANDONED_UPLOAD_MS = 60 * 60_000;
@@ -418,23 +420,48 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
     /**
      * Everything changed after `since`. The returned cursor lags by SYNC_OVERLAP_MS (see above).
      * A cursor older than DELETION_RETENTION_MS gets a full snapshot with `reset: true`.
+     *
+     * Items come in pages of about `pageBytes` (oldest change first), so a full sync of a large library
+     * stays under the hosting response limit. A cut page sets `more` and a cursor at its last item;
+     * items sharing that item's `updatedAt` are never split across pages. Folders, tags, highlights and
+     * deletions are small and always sent in full (the next page may repeat some; applying them is idempotent).
      */
-    async changesSince(requestedSince: number): Promise<SyncResponse> {
+    async changesSince(requestedSince: number, { pageBytes = SYNC_PAGE_BYTES } = {}): Promise<SyncResponse> {
       const t = now();
       const reset = requestedSince > 0 && requestedSince < t - DELETION_RETENTION_MS;
       const since = reset ? 0 : requestedSince;
       const changed = { updatedAt: { $gt: since } };
-      const [bookmarks, folders, highlights, tags, deletions] = await Promise.all([
-        c.bookmarks.find(changed, { projection: CLIENT_PROJECTION }).toArray(),
+
+      const bookmarks: Bookmark[] = [];
+      let bytes = 0;
+      let more = false;
+      const changedItems = c.bookmarks.find(changed, { projection: CLIENT_PROJECTION }).sort({ updatedAt: 1, _id: 1 });
+      for await (const doc of changedItems) {
+        const last = bookmarks.at(-1);
+        // Cut only between distinct updatedAt values, and only where the cursor still moves forward.
+        if (last && bytes >= pageBytes && doc.updatedAt > last.updatedAt && last.updatedAt > since) {
+          more = true;
+          break;
+        }
+        const b = toBookmark(doc as BookmarkDoc);
+        bookmarks.push(b);
+        bytes += JSON.stringify(b).length;
+      }
+      await changedItems.close();
+
+      const [folders, highlights, tags, deletions] = await Promise.all([
         c.folders.find(changed).toArray(),
         c.highlights.find(changed).toArray(),
         c.tags.find(changed).toArray(),
         reset ? [] : c.deletions.find({ deletedAt: { $gt: since } }).toArray(),
       ]);
+      const settled = Math.max(t - SYNC_OVERLAP_MS, since);
       return {
-        cursor: Math.max(t - SYNC_OVERLAP_MS, since),
+        // A cut page resumes after its last item, but never ahead of the overlap window.
+        cursor: more ? Math.min(bookmarks.at(-1)!.updatedAt, settled) : settled,
         reset,
-        bookmarks: bookmarks.map((d) => toBookmark(d as BookmarkDoc)),
+        more,
+        bookmarks,
         folders: folders.map(toFolder),
         highlights: highlights.map(toHighlight),
         tags: tags.map(toTag),

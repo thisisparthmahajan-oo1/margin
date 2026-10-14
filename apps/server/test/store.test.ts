@@ -71,6 +71,37 @@ describe('store', () => {
     expect(second.deletions.map((d) => `${d.entity}:${d.id}`).sort()).toEqual([`bookmark:${a.id}`, `highlight:${h.id}`].sort());
   });
 
+  it('pages a large sync without losing or splitting items, and keeps reset on the first page', async () => {
+    const old = Date.now() - 60 * 60_000;
+    const ids: string[] = [];
+    for (let i = 0; i < 9; i++) ids.push((await save(`https://a.com/${i}`)).id);
+    // Three items share each timestamp; a page must never split such a group.
+    for (const [i, id] of ids.entries()) await ctx.c.bookmarks.updateOne({ _id: id }, { $set: { updatedAt: old + Math.floor(i / 3) } });
+    const page = (since: number) => store().changesSince(since, { pageBytes: 1 });
+
+    const seen: string[] = [];
+    let since = 0;
+    const pages = [];
+    for (let res = await page(since); ; res = await page(since)) {
+      pages.push(res);
+      seen.push(...res.bookmarks.map((b) => b.id));
+      expect(new Set(res.bookmarks.map((b) => b.updatedAt)).size).toBe(1); // one whole group per page
+      since = res.cursor;
+      if (!res.more) break;
+    }
+    expect(pages.map((p) => p.bookmarks.length)).toEqual([3, 3, 3]);
+    expect(seen.sort()).toEqual([...ids].sort());
+    expect(pages.at(-1)!.cursor).toBeGreaterThan(old); // back to the normal cursor once caught up
+
+    // Small libraries come in one page, exactly as before.
+    expect(await store().changesSince(0)).toMatchObject({ more: false });
+
+    // A cursor past deletion retention: the first page is the reset, later pages aren't.
+    const first = await store().changesSince(1, { pageBytes: 1 });
+    expect(first).toMatchObject({ reset: true, more: true });
+    expect((await store().changesSince(first.cursor, { pageBytes: 1 })).reset).toBe(false);
+  });
+
   it('finds stale pending bookmarks for recovery', async () => {
     const a = await save('https://a.com');
     expect(await store().stalePendingIds()).toEqual([]);

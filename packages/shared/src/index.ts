@@ -300,6 +300,11 @@ export interface SyncResponse {
    * been missed. This response is a full snapshot: replace the local library with it.
    */
   reset: boolean;
+  /**
+   * More changed items than fit in one response: sync again from `cursor` straight away for the
+   * rest. (A client that waits for its next regular sync still gets everything, just later.)
+   */
+  more: boolean;
   bookmarks: Bookmark[];
   folders: Folder[];
   highlights: Highlight[];
