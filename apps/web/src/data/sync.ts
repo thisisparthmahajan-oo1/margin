@@ -8,7 +8,7 @@ import {
   type Tag,
 } from '@margin/shared';
 import { useSyncExternalStore } from 'react';
-import { api, ApiRequestError } from './api.ts';
+import { api, ApiRequestError, NetworkError, request } from './api.ts';
 import { db, type OutboxOp } from './db.ts';
 import { downloadMissingFiles, pruneFiles } from './files.ts';
 import { downloadMissingMedia, pruneMedia } from './media.ts';
@@ -56,7 +56,7 @@ const send: { [T in OutboxOp['type']]: Sender<T> } = {
       bookmarkId: op.id, name: op.name, bytes: op.bytes, sha256,
     });
     if (prepared.status === 'exists') return replaceLocal(op.id, prepared.bookmark);
-    const put = await fetch(prepared.putUrl, { method: 'PUT', body: blob, headers: { 'content-type': PDF_CONTENT_TYPE } });
+    const put = await request(prepared.putUrl, { method: 'PUT', body: blob, headers: { 'content-type': PDF_CONTENT_TYPE } });
     if (put.status >= 400 && put.status < 500) {
       throw new ApiRequestError(put.status, `File storage refused the upload (HTTP ${put.status}). Try again later.`);
     }
@@ -152,9 +152,10 @@ async function pull() {
     await db.folders.bulkPut(clean(res.folders));
     await db.highlights.bulkPut(clean(res.highlights));
     await db.tags.bulkPut(clean(res.tags));
+    const tables = { bookmark: db.bookmarks, folder: db.folders, highlight: db.highlights, tag: db.tags };
     for (const d of res.deletions) {
-      const table = { bookmark: db.bookmarks, folder: db.folders, highlight: db.highlights, tag: db.tags }[d.entity];
-      await table.delete(d.id);
+      // A newer server can delete kinds of things this version doesn't know about; they aren't stored here anyway.
+      await (tables as Partial<typeof tables>)[d.entity]?.delete(d.id);
     }
     await db.meta.put({ key: 'syncCursor', value: res.cursor });
   });
@@ -202,7 +203,9 @@ export function syncNow(): Promise<void> {
         await pull();
         setStatus({ state: 'idle', lastSyncedAt: Date.now() });
       } catch (e) {
-        const state = e instanceof ApiRequestError ? (e.status === 401 ? 'unauthorized' : 'error') : 'offline';
+        // Only a request that got no response means offline; anything else is a real failure worth seeing.
+        const state = e instanceof NetworkError ? 'offline' : e instanceof ApiRequestError && e.status === 401 ? 'unauthorized' : 'error';
+        if (state === 'error') console.error('Sync failed', e);
         setStatus({ state });
         again = false;
       }

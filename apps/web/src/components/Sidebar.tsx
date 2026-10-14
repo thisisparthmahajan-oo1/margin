@@ -9,7 +9,7 @@ const SYNC_LABELS = {
   idle: 'Up to date',
   syncing: 'Syncing',
   offline: 'Offline, changes will sync later',
-  error: 'Can’t reach the server',
+  error: 'Couldn’t sync, will try again',
   unauthorized: 'Signed out',
 } as const;
 
