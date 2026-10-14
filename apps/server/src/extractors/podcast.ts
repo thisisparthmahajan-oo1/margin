@@ -54,7 +54,7 @@ export const podcastExtractor: Extractor = {
 
 /**
  * Apple's episode page describes the episode in schema.org JSON-LD, old episodes included, but cuts
- * the notes at 250 characters. The full notes come from the iTunes lookup when it has the episode.
+ * the notes at 250 characters. The full notes come from the page's own data, or the iTunes lookup.
  */
 export function fromApplePage(html: string, pageUrl: string, fullNotes: string | null = null): ExtractedPodcast {
   const doc = parseDocument(html);
@@ -62,7 +62,9 @@ export function fromApplePage(html: string, pageUrl: string, fullNotes: string |
   const meta = metaReader(doc);
   const title = ld?.name ?? meta('og:title');
   if (!title) throw new ExtractionError('Couldn’t find this episode on Apple Podcasts. It may have been removed.');
-  const notes = fullNotes?.trim() || ld?.description?.trim() || '';
+  // Best first: the page's HTML notes (with links), the lookup's plain text, the cut-short JSON-LD.
+  const notesHtml = fullNotesHtml(doc, ld?.description ?? null);
+  const notes = fullNotes?.trim() || (notesHtml ? squash(textOf(notesHtml)) : '') || ld?.description?.trim() || '';
   return episode(
     { provider: 'apple', showName: ld?.series ?? null, durationSeconds: ld?.durationSeconds ?? null },
     {
@@ -72,9 +74,42 @@ export function fromApplePage(html: string, pageUrl: string, fullNotes: string |
       leadImage: meta('og:image') ?? ld?.image ?? null,
       publishedAt: ld?.published ?? null,
       baseUrl: pageUrl,
+      html: notesHtml,
     },
   );
 }
+
+/**
+ * Apple's page data also holds the full notes, as HTML with their links. Rather than depend on where
+ * they sit in it, take the longest string whose text starts like the cut-short JSON-LD notes.
+ */
+function fullNotesHtml(doc: Document, short: string | null): string | null {
+  const start = squash(short ?? '').replace(/…$/, '').slice(0, 100);
+  if (start.length < 20) return null;
+  let best: string | null = null;
+  for (const script of doc.querySelectorAll('script[type="application/json"]')) {
+    try {
+      (function walk(v: unknown): void {
+        if (typeof v === 'string') {
+          if (v.length > (best?.length ?? 0) && v.length > start.length && squash(textOf(v)).startsWith(start)) best = v;
+        } else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+      })(JSON.parse(script.textContent ?? ''));
+    } catch {
+      // not JSON
+    }
+  }
+  return best;
+}
+
+const squash = (s: string) => s.replace(/\s+/g, ' ').trim();
+const textOf = (html: string) =>
+  html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'");
 
 /** The episode's full notes from Apple's public lookup API, which lists a show's latest 200 episodes. Best effort. */
 async function appleFullNotes(show: string, episode: string): Promise<string | null> {
@@ -192,7 +227,17 @@ const metaReader = (doc: Document) => (name: string) =>
 
 function episode(
   audio: AudioRef,
-  d: { title: string; siteName: string; notes: string; leadImage: string | null; publishedAt: number | null; baseUrl: string },
+  d: {
+    title: string;
+    siteName: string;
+    /** Plain text; also the excerpt. */
+    notes: string;
+    /** The notes as HTML when the source has them (sanitized later, like any page). */
+    html?: string | null;
+    leadImage: string | null;
+    publishedAt: number | null;
+    baseUrl: string;
+  },
 ): ExtractedPodcast {
   return {
     kind: 'podcast',
@@ -203,7 +248,7 @@ function episode(
     siteName: d.siteName,
     excerpt: d.notes ? d.notes.slice(0, 240) : null,
     leadImage: d.leadImage,
-    html: plainTextHtml(d.notes),
+    html: d.html ?? plainTextHtml(d.notes),
     baseUrl: d.baseUrl,
     publishedAt: d.publishedAt,
   };

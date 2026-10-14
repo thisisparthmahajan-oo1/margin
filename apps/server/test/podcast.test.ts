@@ -39,10 +39,15 @@ describe('podcasts', () => {
       publishedAt: Date.parse('2026-10-13'),
     });
     expect(ep.leadImage).toMatch(/^https:\/\/is1-ssl\.mzstatic\.com\//);
-    expect(ep.html).toMatch(/^<p>Watch along AIE NYC/);
-    // The page cuts the notes short; the full ones from the iTunes lookup win when there are any.
-    const full = fromApplePage(fixture('apple-podcast-episode.html'), 'https://x', 'Full notes.\n\nSecond paragraph.');
-    expect(full.html).toBe('<p>Full notes.</p>\n<p>Second paragraph.</p>');
+    // The JSON-LD notes stop at 250 characters; the full ones, with their links, are in the page's own data.
+    expect(ep.excerpt).toMatch(/^Watch along AIE NYC and join us at AIE CODE/);
+    expect(ep.html.length).toBeGreaterThan(9000);
+    expect(ep.html).toContain('<a href="https://www.youtube.com/watch?v=akEqiXFo3GM">');
+    expect(ep.html).toContain('claiming several new scaling laws');
+    // Without the page data (Apple changed its layout), the iTunes lookup's notes, then the short ones.
+    const bare = fixture('apple-podcast-episode.html').replace(/<script type="application\/json"[\s\S]*?<\/script>/, '');
+    expect(fromApplePage(bare, 'https://x', 'Full notes.\n\nSecond paragraph.').html).toBe('<p>Full notes.</p>\n<p>Second paragraph.</p>');
+    expect(fromApplePage(bare, 'https://x').html).toMatch(/^<p>Watch along AIE NYC.*<\/p>$/s);
   });
 
   it('reads a Spotify episode from the tags it gives link previews', () => {
