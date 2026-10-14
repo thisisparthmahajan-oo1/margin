@@ -1,4 +1,4 @@
-import { Archive, FileText, FolderClosed, Heart, Inbox, MonitorPlay, Plus, Search, Settings, StickyNote, Tag } from 'lucide-react';
+import { Archive, FileText, FolderClosed, Headphones, Heart, Inbox, MonitorPlay, Plus, Search, Settings, StickyNote, Tag } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { createFolder } from '../data/actions.ts';
@@ -65,6 +65,11 @@ export function Sidebar() {
         <li>
           <NavLink to="/videos">
             <MonitorPlay size={17} /> Videos
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/podcasts">
+            <Headphones size={17} /> Podcasts
           </NavLink>
         </li>
         <li>

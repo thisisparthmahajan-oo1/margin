@@ -90,6 +90,7 @@ export async function backfill(c: Collections) {
   await c.bookmarks.updateMany({ tagIds: { $exists: false } }, { $set: { tagIds: [] } });
   await c.bookmarks.updateMany({ suggestion: { $exists: false } }, { $set: { suggestion: null } });
   await c.bookmarks.updateMany({ relevance: { $exists: false } }, { $set: { relevance: null, relevanceAt: null } });
+  await c.bookmarks.updateMany({ audio: { $exists: false } }, { $set: { audio: null } });
 }
 
 /**

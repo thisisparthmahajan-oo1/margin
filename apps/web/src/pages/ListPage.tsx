@@ -23,6 +23,7 @@ const EMPTY: Record<ListKey['kind'], string> = {
   archive: 'Articles you finish and archive are kept here.',
   pdfs: 'PDFs you add show up here. Use Add PDF, drop a file on this page, or share one to Margin from your phone.',
   videos: 'YouTube links you save, and X posts and articles with videos, show up here.',
+  podcasts: 'Podcast episodes you save show up here. Paste an Apple Podcasts or Spotify episode link, or a show’s episode page.',
   folder: 'This folder is empty. Use Move on any article to put it here.',
   tag: 'Nothing has this tag right now. Use the tag button on any item to add it.',
 };
@@ -76,6 +77,7 @@ export function ListPage({ list: fixedList }: { list?: ListKey }) {
     archive: 'Archive',
     pdfs: 'PDFs',
     videos: 'Videos',
+    podcasts: 'Podcasts',
     folder: folder?.name ?? 'Folder',
     tag: tag?.name ?? 'Tag',
   }[list.kind];

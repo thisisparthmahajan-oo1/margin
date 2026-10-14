@@ -2,7 +2,8 @@ import { Readability } from '@mozilla/readability';
 import { parseDocument } from '../html.ts';
 import { config } from '../config.ts';
 import { httpGet } from '../http.ts';
-import { ExtractionError, type ExtractedArticle, type ExtractedPdf, type Extractor } from './types.ts';
+import { podcastSignals } from './podcast.ts';
+import { ExtractionError, type ExtractedArticle, type ExtractedPdf, type ExtractedPodcast, type Extractor } from './types.ts';
 
 /** Players embedded in a page. Checked before Readability, which drops them. */
 const VIDEO_SELECTOR = [
@@ -44,9 +45,11 @@ function fileNameOf(res: Response, finalUrl: string): string {
   return last || 'Document.pdf';
 }
 
-export function extractFromHtml(html: string, pageUrl: string): ExtractedArticle {
+/** An article, or a podcast episode page (its show notes or transcript are the text). */
+export function extractFromHtml(html: string, pageUrl: string): ExtractedArticle | ExtractedPodcast {
   const doc = parseDocument(html);
   const hasVideo = doc.querySelector(VIDEO_SELECTOR) !== null;
+  const podcast = podcastSignals(doc, html);
   const meta = (selector: string) => doc.querySelector<HTMLMetaElement>(selector)?.content?.trim() || null;
 
   const leadImage = meta('meta[property="og:image"]') ?? meta('meta[name="twitter:image"]');
@@ -62,12 +65,16 @@ export function extractFromHtml(html: string, pageUrl: string): ExtractedArticle
   }
 
   const publishedAt = published ? Date.parse(published) : NaN;
+  const siteName = article.siteName?.trim() || meta('meta[property="og:site_name"]');
+  const kind = podcast
+    ? ({ kind: 'podcast', audio: { provider: 'web', showName: podcast.showName ?? siteName, durationSeconds: podcast.durationSeconds } } as const)
+    : ({ kind: 'article' } as const);
   return {
-    kind: 'article',
+    ...kind,
     hasVideo,
     title: article.title?.trim() || meta('meta[property="og:title"]') || new URL(pageUrl).hostname,
     byline: article.byline?.trim() || null,
-    siteName: article.siteName?.trim() || meta('meta[property="og:site_name"]'),
+    siteName,
     excerpt: article.excerpt?.trim() || null,
     leadImage: leadImage ? new URL(leadImage, pageUrl).href : null,
     html: article.content,

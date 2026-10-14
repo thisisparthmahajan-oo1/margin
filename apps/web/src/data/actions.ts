@@ -32,7 +32,7 @@ const placeholder = (fields: Pick<Bookmark, 'id' | 'url' | 'source'> & Partial<B
   return {
     canonicalUrl: fields.url, kind: 'article', status: 'pending', error: null, title: null, byline: null,
     siteName: null, excerpt: null, leadImage: null, contentHtml: null, wordCount: 0, publishedAt: null,
-    hasVideo: false, file: null, video: null, tagIds: [], suggestion: null, relevance: null, relevanceAt: null, folderId: null, likedAt: null, archivedAt: null, progress: 0,
+    hasVideo: false, file: null, video: null, audio: null, tagIds: [], suggestion: null, relevance: null, relevanceAt: null, folderId: null, likedAt: null, archivedAt: null, progress: 0,
     progressUpdatedAt: null, savedAt: now, updatedAt: now,
     ...fields,
   };
@@ -44,7 +44,9 @@ const sourceOf = (url: string): BookmarkSource =>
     ? 'x'
     : /^https?:\/\/(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i.test(url)
       ? 'youtube'
-      : 'web';
+      : /^https?:\/\/(podcasts\.apple\.com\/.*[?&]i=\d|open\.spotify\.com\/(intl-[\w-]+\/)?episode\/)/i.test(url)
+        ? 'podcast'
+        : 'web';
 
 /** Pulls a URL out of pasted or shared text ("Look at this https://…"). */
 export function findUrl(text: string): string | null {

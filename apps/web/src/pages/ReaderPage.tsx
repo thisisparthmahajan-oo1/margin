@@ -39,6 +39,7 @@ import { toast } from '../data/toast.ts';
 import { clearHighlights, describeRange, highlight } from '../reader/anchor.ts';
 import { ReaderSettingsPanel } from '../reader/ReaderSettingsPanel.tsx';
 import { useSpeech } from '../reader/useSpeech.ts';
+import { PodcastHeader } from '../reader/PodcastHeader.tsx';
 import { VideoHeader } from '../reader/VideoHeader.tsx';
 
 // pdf.js is large; it's only loaded when a PDF's original pages are shown.
@@ -357,6 +358,7 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
           )}
         </header>
         {b.kind === 'video' && <VideoHeader bookmark={b} />}
+        {b.kind === 'podcast' && <PodcastHeader bookmark={b} />}
         {showing === 'text' ? (
           <div className="article-body" ref={contentRef} onClick={onContentClick} />
         ) : (

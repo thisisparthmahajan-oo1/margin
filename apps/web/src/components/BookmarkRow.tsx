@@ -14,6 +14,7 @@ const PENDING: Record<BookmarkSource, string> = {
   web: 'Downloading the article…',
   x: 'Downloading the post…',
   youtube: 'Saving the video details…',
+  podcast: 'Saving the episode details…',
   upload: 'Uploading and reading the PDF…',
 };
 
@@ -24,10 +25,13 @@ export function originOf(b: Bookmark): string {
       return `${b.byline ?? 'X'} on X`;
     case 'youtube':
       return b.byline ? `${b.byline} on YouTube` : 'YouTube';
+    case 'podcast':
+      return b.audio?.showName ?? b.siteName ?? 'Podcast';
     case 'upload':
       return 'PDF';
     case 'web':
-      return b.kind === 'pdf' ? `PDF from ${domainOf(b.url)}` : domainOf(b.url);
+      if (b.kind === 'pdf') return `PDF from ${domainOf(b.url)}`;
+      return b.kind === 'podcast' && b.audio?.showName ? b.audio.showName : domainOf(b.url);
   }
 }
 

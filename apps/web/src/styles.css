@@ -1360,6 +1360,37 @@ a.row-link:hover .row-title {
   font-size: 13px;
   color: var(--r-muted);
 }
+/* A podcast episode: artwork and where to listen. Nothing is downloaded. */
+.podcast-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0 0 1.6em;
+  font-family: var(--ui);
+}
+.podcast-art {
+  width: 112px;
+  height: 112px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--wash);
+}
+.reader-article .podcast-listen {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--margin);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.reader-article .podcast-listen:hover {
+  filter: brightness(1.1);
+}
 .video-frame {
   aspect-ratio: 16 / 9;
   margin: 0 0 1.6em;

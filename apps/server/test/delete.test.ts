@@ -9,7 +9,7 @@ const setup = () => {
   return { media, store: createStore(ctx.c, media, null) };
 };
 const article = (title: string, images: string[], leadImage: string | null = null) => ({
-  kind: 'article' as const, hasVideo: false, file: null, video: null,
+  kind: 'article' as const, hasVideo: false, file: null, video: null, audio: null,
   title, byline: null, siteName: null, excerpt: null, leadImage, plainText: title, wordCount: 1, publishedAt: null,
   contentHtml: images.map((src) => `<img src="${src}">`).join(''),
 });

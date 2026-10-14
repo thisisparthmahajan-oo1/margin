@@ -1,5 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
-import type { ExtractedArticle, ExtractedText, ExtractedVideo } from './extractors/index.ts';
+import type { ExtractedArticle, ExtractedPodcast, ExtractedText, ExtractedVideo } from './extractors/index.ts';
 import { parseFragment } from './html.ts';
 import { httpGet } from './http.ts';
 import { MEDIA_PREFIX, type MediaStore } from './media.ts';
@@ -41,14 +41,16 @@ const SANITIZE: sanitizeHtml.IOptions = {
   allowedSchemesAppliedToAttributes: ['href', 'src', 'poster'],
 };
 
-/** A web page or video, extracted -> stored content. (PDFs go through `processPdf` in pdf.ts.) */
-export async function processPage(raw: ExtractedArticle | ExtractedVideo, media: MediaStore): Promise<ExtractedContent> {
+/** A web page, video or podcast episode, extracted -> stored content. (PDFs go through `processPdf` in pdf.ts.) */
+export async function processPage(raw: ExtractedArticle | ExtractedVideo | ExtractedPodcast, media: MediaStore): Promise<ExtractedContent> {
   const text = await processText(raw, media);
   switch (raw.kind) {
     case 'article':
-      return { ...text, kind: 'article', hasVideo: raw.hasVideo, file: null, video: null };
+      return { ...text, kind: 'article', hasVideo: raw.hasVideo, file: null, video: null, audio: null };
     case 'video':
-      return { ...text, kind: 'video', hasVideo: true, file: null, video: raw.video };
+      return { ...text, kind: 'video', hasVideo: true, file: null, video: raw.video, audio: null };
+    case 'podcast':
+      return { ...text, kind: 'podcast', hasVideo: false, file: null, video: null, audio: raw.audio };
   }
 }
 

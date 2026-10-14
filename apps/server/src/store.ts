@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   mediaPathsIn,
+  type AudioRef,
   type Bookmark,
   type BookmarkKind,
   type BookmarkSource,
@@ -60,6 +61,7 @@ export interface ExtractedContent {
   hasVideo: boolean;
   file: StoredFile | null;
   video: VideoRef | null;
+  audio: AudioRef | null;
 }
 
 export interface NewBookmark {
@@ -170,6 +172,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         hasVideo: false,
         file: input.file ?? null,
         video: null,
+        audio: null,
         tagIds: input.tagIds ?? [],
         suggestion: input.suggestion ?? null,
         relevance: null,

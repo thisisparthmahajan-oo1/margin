@@ -1,4 +1,5 @@
 import { httpGet } from '../http.ts';
+import { plainTextHtml } from './plain-text.ts';
 import { ExtractionError, type ExtractedVideo, type Extractor } from './types.ts';
 
 /**
@@ -109,25 +110,8 @@ export function fromYouTube(videoId: string, oembed: OEmbed, details: PlayerDeta
     siteName: 'YouTube',
     excerpt: description ? description.slice(0, 240) : null,
     leadImage: oembed.thumbnail_url ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-    html: descriptionHtml(description),
+    html: plainTextHtml(description),
     baseUrl: watchUrl(videoId),
     publishedAt: details?.publishedAt ?? null,
   };
 }
-
-/** Plain-text description -> paragraphs, with its links made clickable. */
-function descriptionHtml(text: string): string {
-  return text
-    .split(/\n{2,}/)
-    .filter((p) => p.trim())
-    .map((p) => `<p>${linkify(p).replace(/\n/g, '<br>')}</p>`)
-    .join('\n');
-}
-
-const linkify = (text: string) =>
-  text
-    .split(/(https?:\/\/[^\s<>"]+)/g)
-    .map((part, i) => (i % 2 ? `<a href="${escapeHtml(part).replace(/"/g, '&quot;')}">${escapeHtml(part)}</a>` : escapeHtml(part)))
-    .join('');
-
-const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

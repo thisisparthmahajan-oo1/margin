@@ -9,7 +9,7 @@ const ctx = useTestDb();
 const store = () => createStore(ctx.c, createMediaStore(ctx.db), null);
 const save = async (url: string) => (await store().saveBookmark({ url, canonicalUrl: url, source: 'web' })).bookmark;
 const content = (title: string, text: string) => ({
-  kind: 'article' as const, hasVideo: false, file: null, video: null,
+  kind: 'article' as const, hasVideo: false, file: null, video: null, audio: null,
   title, byline: null, siteName: 'Site', excerpt: null, leadImage: null,
   contentHtml: `<p>${text}</p>`, plainText: text, wordCount: text.split(' ').length, publishedAt: null,
 });

@@ -1,3 +1,4 @@
+import { podcastEpisodeUrl } from './extractors/podcast.ts';
 import { watchUrl, youtubeVideoId } from './extractors/youtube.ts';
 
 const TRACKING_PARAMS = /^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|ref_src|ref_url|igshid)$/i;
@@ -26,6 +27,9 @@ export function canonicalize(url: URL): string {
   // Every YouTube link form (youtu.be, shorts, ?si=…&t=…) is the same video.
   const videoId = youtubeVideoId(url);
   if (videoId) return watchUrl(videoId);
+  // Likewise every share link to one podcast episode (Apple's slugs and countries, Spotify's ?si=).
+  const episode = podcastEpisodeUrl(url);
+  if (episode) return episode;
   const u = new URL(url.href);
   u.hash = '';
   u.protocol = 'https:';

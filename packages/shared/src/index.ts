@@ -2,10 +2,13 @@
 // All timestamps are epoch milliseconds; `null` means "not set".
 
 /** Where an item came from. `upload` = a file added from a device (it has no web address). */
-export type BookmarkSource = 'web' | 'x' | 'youtube' | 'upload';
+export type BookmarkSource = 'web' | 'x' | 'youtube' | 'podcast' | 'upload';
 export type BookmarkStatus = 'pending' | 'ready' | 'failed';
-/** What an item is, which decides how it's read: text, a PDF (text + original pages), or a video (watched online). */
-export type BookmarkKind = 'article' | 'pdf' | 'video';
+/**
+ * What an item is, which decides how it's read: text, a PDF (text + original pages), a video
+ * (watched online), or a podcast episode (listened to in its app or site).
+ */
+export type BookmarkKind = 'article' | 'pdf' | 'video' | 'podcast';
 
 /** An original file kept in file storage (Cloudflare R2). */
 export interface StoredFile {
@@ -21,6 +24,13 @@ export interface StoredFile {
 export interface VideoRef {
   provider: 'youtube';
   videoId: string;
+  durationSeconds: number | null;
+}
+
+/** A podcast episode that's linked, not downloaded: the text is its show notes, and it's played where it lives. */
+export interface AudioRef {
+  provider: 'apple' | 'spotify' | 'web';
+  showName: string | null;
   durationSeconds: number | null;
 }
 
@@ -46,6 +56,8 @@ export interface Bookmark {
   file: StoredFile | null;
   /** kind 'video': what the player needs. */
   video: VideoRef | null;
+  /** kind 'podcast': the episode's show and length. */
+  audio: AudioRef | null;
   /** Tags on this item (any number, independent of its folder). */
   tagIds: string[];
   /** Set when something other than you added the item (the Daily Curator); null for items you saved. */
@@ -124,6 +136,7 @@ export type ListKey =
   | { kind: 'archive' }
   | { kind: 'pdfs' }
   | { kind: 'videos' }
+  | { kind: 'podcasts' }
   | { kind: 'folder'; folderId: string }
   | { kind: 'tag'; tagId: string };
 
@@ -145,6 +158,8 @@ export function isInList(
       return b.archivedAt === null && b.kind === 'pdf';
     case 'videos':
       return b.archivedAt === null && b.hasVideo;
+    case 'podcasts':
+      return b.archivedAt === null && b.kind === 'podcast';
     case 'folder':
       return b.archivedAt === null && b.folderId === list.folderId;
     case 'tag':
@@ -175,12 +190,14 @@ export const WORDS_PER_MINUTE = 230;
 export const readingMinutes = (wordCount: number) => Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
 
 /** How long an item is, in the unit that fits it: "12 min", "24 pages", "1 h 5 min video". Null if not known yet. */
-export function lengthLabel(b: Pick<Bookmark, 'kind' | 'wordCount' | 'file' | 'video'>): string | null {
+export function lengthLabel(b: Pick<Bookmark, 'kind' | 'wordCount' | 'file' | 'video' | 'audio'>): string | null {
   switch (b.kind) {
     case 'pdf':
       return b.file?.pages ? `${b.file.pages} ${b.file.pages === 1 ? 'page' : 'pages'}` : null;
     case 'video':
       return b.video?.durationSeconds ? `${formatDuration(b.video.durationSeconds)} video` : 'Video';
+    case 'podcast':
+      return b.audio?.durationSeconds ? `${formatDuration(b.audio.durationSeconds)} episode` : 'Podcast';
     case 'article':
       return `${readingMinutes(b.wordCount)} min`;
   }

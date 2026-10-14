@@ -51,6 +51,7 @@ export async function processPdf(bytes: Buffer, file: StoredFile): Promise<Extra
     hasVideo: false,
     file: { ...file, pages: pageCount },
     video: null,
+    audio: null,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { BookmarkSource, VideoRef } from '@margin/shared';
+import type { AudioRef, BookmarkSource, VideoRef } from '@margin/shared';
 
 /** A readable page: unsanitized HTML with possibly-relative URLs resolved against `baseUrl`. */
 export interface ExtractedText {
@@ -17,11 +17,13 @@ export interface ExtractedText {
 export type ExtractedArticle = { kind: 'article' } & ExtractedText;
 /** A video page: the text is its description, `video` is what the player needs. */
 export type ExtractedVideo = { kind: 'video'; video: VideoRef } & ExtractedText;
+/** A podcast episode: the text is its show notes (or transcript), `audio` its show and length. */
+export type ExtractedPodcast = { kind: 'podcast'; audio: AudioRef } & ExtractedText;
 /** The link was a PDF file. */
 export type ExtractedPdf = { kind: 'pdf'; bytes: Buffer; fileName: string };
 
 /** What an extractor hands to the pipeline. */
-export type Extracted = ExtractedArticle | ExtractedVideo | ExtractedPdf;
+export type Extracted = ExtractedArticle | ExtractedVideo | ExtractedPodcast | ExtractedPdf;
 
 export interface Extractor {
   name: string;

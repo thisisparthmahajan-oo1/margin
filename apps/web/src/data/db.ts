@@ -116,3 +116,14 @@ db.version(6)
         b.relevanceAt ??= null;
       }),
   );
+
+db.version(7)
+  .stores({})
+  .upgrade((tx) =>
+    tx
+      .table<Bookmark>('bookmarks')
+      .toCollection()
+      .modify((b) => {
+        b.audio ??= null;
+      }),
+  );
