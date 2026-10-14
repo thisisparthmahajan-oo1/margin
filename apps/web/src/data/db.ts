@@ -93,3 +93,14 @@ db.version(4)
         b.tagIds ??= [];
       }),
   );
+
+db.version(5)
+  .stores({})
+  .upgrade((tx) =>
+    tx
+      .table<Bookmark>('bookmarks')
+      .toCollection()
+      .modify((b) => {
+        b.suggestion ??= null;
+      }),
+  );

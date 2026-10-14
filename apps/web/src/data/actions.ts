@@ -31,7 +31,7 @@ const placeholder = (fields: Pick<Bookmark, 'id' | 'url' | 'source'> & Partial<B
   return {
     canonicalUrl: fields.url, kind: 'article', status: 'pending', error: null, title: null, byline: null,
     siteName: null, excerpt: null, leadImage: null, contentHtml: null, wordCount: 0, publishedAt: null,
-    hasVideo: false, file: null, video: null, tagIds: [], folderId: null, likedAt: null, archivedAt: null, progress: 0,
+    hasVideo: false, file: null, video: null, tagIds: [], suggestion: null, folderId: null, likedAt: null, archivedAt: null, progress: 0,
     progressUpdatedAt: null, savedAt: now, updatedAt: now,
     ...fields,
   };

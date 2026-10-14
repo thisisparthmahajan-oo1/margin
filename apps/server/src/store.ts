@@ -10,6 +10,7 @@ import {
   type SearchHit,
   type Tag,
   type StoredFile,
+  type Suggestion,
   type SyncResponse,
   type TextQuoteAnchor,
   type UpdateBookmarkRequest,
@@ -70,6 +71,11 @@ export interface NewBookmark {
   kind?: BookmarkKind;
   title?: string | null;
   file?: StoredFile | null;
+  folderId?: string | null;
+  tagIds?: string[];
+  suggestion?: Suggestion | null;
+  /** Never re-save an existing item: hand it back untouched (`created: false`). */
+  ifNew?: boolean;
 }
 
 export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, files: Pick<FileStore, 'remove'> | null) {
@@ -111,6 +117,11 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
     return existing ? toBookmark(existing as BookmarkDoc) : null;
   };
 
+  const findByCanonicalUrl = async (canonicalUrl: string) => {
+    const doc = await c.bookmarks.findOne({ canonicalUrl }, { projection: CLIENT_PROJECTION });
+    return doc ? toBookmark(doc as BookmarkDoc) : null;
+  };
+
   const getBookmark = async (id: string) => {
     const doc = await c.bookmarks.findOne({ _id: id });
     return doc ? toBookmark(doc) : null;
@@ -134,7 +145,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
 
     /** Saves a new item, or re-saves an existing one with the same address (`created: false`). */
     async saveBookmark(input: NewBookmark) {
-      const existing = await resave(input.canonicalUrl);
+      const existing = input.ifNew ? await findByCanonicalUrl(input.canonicalUrl) : await resave(input.canonicalUrl);
       if (existing) return { bookmark: existing, created: false };
       const t = now();
 
@@ -159,8 +170,9 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         hasVideo: false,
         file: input.file ?? null,
         video: null,
-        tagIds: [],
-        folderId: null,
+        tagIds: input.tagIds ?? [],
+        suggestion: input.suggestion ?? null,
+        folderId: input.folderId ?? null,
         likedAt: null,
         archivedAt: null,
         progress: 0,

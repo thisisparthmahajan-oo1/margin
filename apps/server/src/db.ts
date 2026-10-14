@@ -88,6 +88,7 @@ export async function backfill(c: Collections) {
     { $set: { kind: 'article', hasVideo: false, file: null, video: null } },
   );
   await c.bookmarks.updateMany({ tagIds: { $exists: false } }, { $set: { tagIds: [] } });
+  await c.bookmarks.updateMany({ suggestion: { $exists: false } }, { $set: { suggestion: null } });
 }
 
 /**

@@ -348,6 +348,11 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
               <span key={part}>{part}</span>
             ))}
           </p>
+          {b.suggestion && (
+            <p className="article-suggestion">
+              <strong>Suggested</strong> {b.suggestion.reason}
+            </p>
+          )}
         </header>
         {b.kind === 'video' && <VideoHeader bookmark={b} />}
         {showing === 'text' ? (

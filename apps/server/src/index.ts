@@ -8,7 +8,7 @@ import { buildDeps } from './wiring.ts';
 assertProductionConfig();
 
 const deps = lazyDeps(() => buildDeps(runInBackground));
-const app = createApp({ deps, appToken: config.appToken, webDist: config.isProduction ? config.webDist : undefined });
+const app = createApp({ deps, appToken: config.appToken, apiTokens: config.apiTokens, webDist: config.isProduction ? config.webDist : undefined });
 
 serve({ fetch: app.fetch, port: config.port, hostname: config.host }, ({ port }) => {
   const lan = Object.values(os.networkInterfaces())

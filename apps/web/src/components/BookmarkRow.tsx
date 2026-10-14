@@ -62,6 +62,11 @@ export function BookmarkRow({
     b.status === 'ready' ? (
       <>
         <span>{originOf(b)}</span>
+        {b.suggestion && (
+          <span className="tag" title={b.suggestion.reason}>
+            Suggested
+          </span>
+        )}
         {lengthLabel(b) && <span>{lengthLabel(b)}</span>}
         {b.hasVideo && b.kind !== 'video' && <span className="tag">Video</span>}
         {b.progress > 0.02 && b.progress < 0.98 && <span>{Math.round(b.progress * 100)}% read</span>}

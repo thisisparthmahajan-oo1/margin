@@ -6,7 +6,7 @@ import { HTTPException } from 'hono/http-exception';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { SessionResponse, SignInRequest } from '@margin/shared';
-import type { AppEnv, Deps } from './deps.ts';
+import { OWNER, type AppEnv, type Deps } from './deps.ts';
 import { bookmarkRoutes } from './routes/bookmarks.ts';
 import { fileRoutes } from './routes/files.ts';
 import { folderRoutes } from './routes/folders.ts';
@@ -29,6 +29,8 @@ export interface AppOptions {
   /** Resolves the connected dependencies; called per request, expected to cache. */
   deps: () => Promise<Deps>;
   appToken: string | null;
+  /** Named tokens for scripts, name -> secret. A request made with one is credited to that name. */
+  apiTokens?: Record<string, string>;
   /** Serve the built PWA from this directory (local production mode; Vercel serves it statically). */
   webDist?: string;
 }
@@ -40,17 +42,19 @@ export function createApp(opts: AppOptions) {
   app.use('/api/*', cors());
 
   const appToken = opts.appToken;
-  if (appToken) {
-    app.use(
-      '/api/*',
-      except(PUBLIC_API, async (c, next) => {
-        const bearer = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1] ?? '';
-        // Devices send a session; scripts and tools may send APP_TOKEN itself.
-        if (isValidSession(appToken, bearer) || safeEqual(bearer, appToken)) return next();
-        return c.json({ error: 'Sign in again' }, 401);
-      }),
-    );
-  }
+  const apiTokens = Object.entries(opts.apiTokens ?? {});
+  app.use(
+    '/api/*',
+    except(PUBLIC_API, async (c, next) => {
+      const bearer = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1] ?? '';
+      const named = apiTokens.find(([, secret]) => safeEqual(bearer, secret));
+      if (named) c.set('caller', named[0]);
+      // Devices send a session; you may also send APP_TOKEN itself. Without APP_TOKEN (local dev) the API is open.
+      else if (!appToken || isValidSession(appToken, bearer) || safeEqual(bearer, appToken)) c.set('caller', OWNER);
+      else return c.json({ error: 'Sign in again' }, 401);
+      return next();
+    }),
+  );
 
   app.get('/api/health', (c) => c.json({ ok: true }));
 
@@ -69,7 +73,7 @@ export function createApp(opts: AppOptions) {
     const uri = process.env.MONGODB_URI;
     const host = (uri ?? 'mongodb://127.0.0.1:27017 (default: MONGODB_URI not set)').replace(/\/\/[^@/]*@/, '//***@');
     const r2 = Object.fromEntries(R2_SETTINGS.map((name) => [name, process.env[name]?.trim() ? 'set' : 'missing']));
-    const settings = { mongodbUriSet: Boolean(uri), host, r2, r2Bucket: process.env.R2_BUCKET?.trim() || null };
+    const settings = { mongodbUriSet: Boolean(uri), host, r2, r2Bucket: process.env.R2_BUCKET?.trim() || null, apiTokens: apiTokens.map(([name]) => name) };
     try {
       await opts.deps();
       return c.json({ db: 'ok', ...settings });

@@ -48,6 +48,8 @@ export interface Bookmark {
   video: VideoRef | null;
   /** Tags on this item (any number, independent of its folder). */
   tagIds: string[];
+  /** Set when something other than you added the item (the Daily Curator); null for items you saved. */
+  suggestion: Suggestion | null;
   folderId: string | null;
   likedAt: number | null;
   archivedAt: number | null;
@@ -56,6 +58,16 @@ export interface Bookmark {
   savedAt: number;
   updatedAt: number;
 }
+
+/** Who suggested an item and why. */
+export interface Suggestion {
+  /** The name of the API token that added it (e.g. `curator`), or `you`. */
+  by: string;
+  reason: string;
+  at: number;
+}
+
+export const SUGGESTION_REASON_MAX = 300;
 
 export interface Folder {
   id: string;
@@ -191,6 +203,18 @@ export const uploadUrlFor = (sha256: string) => `upload:${sha256}`;
 export interface CreateBookmarkRequest {
   id?: string;
   url: string;
+  /** Applied only when the item is created, so it never shows in Home on the way. */
+  folderId?: string | null;
+  addTagIds?: string[];
+  /** Why it was suggested. Who suggested it comes from the credentials the request was sent with. */
+  suggestion?: { reason: string };
+  /** Never re-save: when the address is already saved, answer 409 (`AlreadySavedResponse`) and leave that item alone. */
+  ifNew?: boolean;
+}
+
+/** The 409 answer to a create with `ifNew` when the address is already saved. */
+export interface AlreadySavedResponse extends ApiError {
+  bookmark: Bookmark;
 }
 
 export interface UpdateBookmarkRequest {

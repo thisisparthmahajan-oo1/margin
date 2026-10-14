@@ -860,6 +860,21 @@ a.row-link:hover .row-title {
   color: var(--r-muted);
 }
 
+/* Why the curator picked this: quiet, under the byline, never part of the article text. */
+.article-suggestion {
+  margin: 1.2em 0 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--margin);
+  font-family: var(--ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--r-muted);
+}
+.article-suggestion strong {
+  color: var(--margin);
+  font-weight: 500;
+}
+
 .article-body {
   overflow-wrap: break-word;
   hyphens: auto;
