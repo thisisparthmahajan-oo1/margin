@@ -21,6 +21,7 @@ npm run dev          # API on :8787, web app on :5173 (open http://localhost:517
 | `MONGODB_URI` | `mongodb://127.0.0.1:27017` | MongoDB (Atlas in production)                                    |
 | `DB_NAME`     | `margin`                    | Database name                                                    |
 | `APP_TOKEN`   | unset                       | Access token. **Required in production.** Apps ask for it on first open and stay signed in for 30 days |
+| `API_TOKENS`  | unset                       | Named tokens for scripts, `name=secret,…` (e.g. `curator=…`). Each works like `APP_TOKEN` for the API but can't sign a device in, and is rotated on its own |
 | `PORT`        | `8787`                      | Local server port                                                |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | unset | Cloudflare R2 for PDFs (see below). Without them, adding PDFs is switched off |
 | `FILE_STORAGE_LIMIT_GB` | `5`              | Hard cap on all PDFs together; uploads past it are refused       |
@@ -104,7 +105,7 @@ MARGIN_API_URL=https://marginr.vercel.app npm run ios:device   # build + install
 ## Features
 
 - **Save:** paste a link, or share it to the app. Saving a link you already have moves it back to the top of Home.
-- **Lists:** Home, Liked, PDFs, Videos, Archive, your own folders, and Notes.
+- **Lists:** Home, Liked, PDFs, Videos, Podcasts, Archive, your own folders, and Notes.
 - **Tags:** mark items with where they stand, e.g. *Don't understand yet*. An item can have any number of tags, whatever its folder. Each tag has its own list, and any list (a folder, Home…) can be narrowed to a tag with the chips under its title. Sort by newest, oldest, shortest, or longest.
 - **Reader:** 5 fonts, text size, line spacing, width, and Light/Sepia/Dark/Black themes. It remembers where you stopped, and can optionally archive an article when you reach the end.
 - **Highlights & notes:** select text, then choose Highlight or Add note. They're all collected on the Notes page.
@@ -139,6 +140,24 @@ YouTube links save the title, channel, thumbnail and description. The descriptio
 
 X posts and Articles that contain videos are labelled **Video**; they stream from X. Both kinds appear under **Videos** in the sidebar.
 
+### Podcasts
+
+Apple Podcasts and Spotify episode links, and episode pages on other sites (Substack podcasts, or any page with schema.org `PodcastEpisode` or `og:audio`), are saved as episodes:
+- the title, show, length, date and artwork are saved;
+- the show notes are the text (for Substack, the full transcript);
+- the audio isn't downloaded, so **Listen on …** opens the episode where it plays.
+
+They're listed under **Podcasts**.
+
+### Suggestions (the Daily Curator)
+
+A separate program can add suggestions through the API with its own token (`API_TOKENS`):
+- **Creating:** `POST /api/bookmarks` takes `folderId`, `addTagIds` and `suggestion: {reason}`, so an item arrives already filed, never in Home. With `ifNew: true`, an address that's already saved answers 409 and the existing item is left alone.
+- **Showing:** suggested items show a **Suggested** chip, and the reason under the reader's title.
+- **Feedback:** 👍 / 👎 (`relevance`) tells the curator whether a suggestion was worth it. This is separate from Like, Archive and Delete.
+
+The full contract is in `daily_newsletter/docs/MARGINR_REQUIREMENTS.md`.
+
 ### X Articles
 
 x.com shows nothing without a login, so X posts are read through the public [FxTwitter API](https://github.com/FxEmbed/FxEmbed). Article bodies are converted from X's rich-text blocks into clean HTML (`apps/server/src/extractors/x-article.ts`). Paste the **post link** (`x.com/<user>/status/<id>`). Regular posts are saved too, as short text.
@@ -169,7 +188,7 @@ scripts/           build-vercel.mjs, build-android.mjs, build-ios.mjs
   - [Readability](https://github.com/mozilla/readability), the catch-all, which also notices when a link is a PDF.
 
   Each extractor returns an article, a video or a PDF (`Extracted`), and the pipeline handles each kind. HTML is parsed with parse5 + linkedom, which bundles cleanly for serverless.
-- **Sync:** clients always read from IndexedDB. Changes go to an outbox and are sent in order. Then `GET /api/sync?since=<cursor>` pulls everything that changed, including deletions. The cursor lags real time by 10s, so writes from other serverless instances aren't missed.
+- **Sync:** clients always read from IndexedDB. Changes go to an outbox and are sent in order. Then `GET /api/sync?since=<cursor>` pulls everything that changed, including deletions. The cursor lags real time by 10s, so writes from other serverless instances aren't missed. Large syncs come in pages of about 3 MB (`more: true` means "call again from `cursor`"), which keeps them under Vercel's 4.5 MB response limit.
 - **Images** are stored in GridFS under their content hash (`/api/media/<hash>.<ext>`). That makes them immutable and cacheable forever, and clients keep a copy in IndexedDB.
 - **PDFs** (`apps/server/src/uploads.ts`) are added in three steps:
   1. *prepare* checks the size limits and reserves the space;
