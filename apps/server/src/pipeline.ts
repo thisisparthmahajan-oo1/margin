@@ -58,6 +58,7 @@ export async function processPage(raw: ExtractedArticle | ExtractedVideo | Extra
 async function processText(raw: ExtractedText, media: MediaStore) {
   const body = parseFragment(raw.html);
 
+  replaceDiagrams(body, raw.baseUrl);
   resolveUrls(body, raw.baseUrl);
   const localImages = await localizeImages(body, media);
 
@@ -89,6 +90,37 @@ export function textOf(contentHtml: string) {
   const spaced = contentHtml.replace(/<\/(p|h[1-6]|li|blockquote|pre|figcaption|td|th|dd|dt)>/g, '$& ');
   const plainText = (parseFragment(spaced).textContent ?? '').replace(/\s+/g, ' ').trim();
   return { plainText, wordCount: plainText ? plainText.split(' ').length : 0 };
+}
+
+/**
+ * Inline SVG can't be kept (it isn't safe to show, and depends on the page's styles and scripts), and
+ * dropping only its tags runs its labels together into nonsense. A diagram (an SVG with text) becomes a
+ * note with its own title and description and a link to the page; icons (no text) are dropped.
+ */
+function replaceDiagrams(root: HTMLElement, pageUrl: string) {
+  for (const svg of [...root.querySelectorAll('svg')]) {
+    if (!svg.isConnected || svg.parentElement?.closest('svg')) continue;
+    if (!svg.querySelector('text') && !svg.querySelector('title')) {
+      svg.remove();
+      continue;
+    }
+    const doc = svg.ownerDocument;
+    const describe = (el: Element | null) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    const about = [describe(svg.querySelector('title')), describe(svg.querySelector('desc'))]
+      .filter(Boolean)
+      .map((t) => (/[.!?]$/.test(t) ? t : `${t}.`))
+      .join(' ');
+    const note = doc.createElement('figure');
+    const caption = doc.createElement('figcaption');
+    const label = doc.createElement('strong');
+    label.textContent = 'Diagram';
+    const link = doc.createElement('a');
+    link.setAttribute('href', pageUrl);
+    link.textContent = 'See it on the original page ↗';
+    caption.append(label, doc.createTextNode(about ? `: ${about} ` : ' '), link);
+    note.append(caption);
+    svg.replaceWith(note);
+  }
 }
 
 function resolveUrls(root: HTMLElement, base: string) {
