@@ -119,13 +119,35 @@ function resolveUrls(root: HTMLElement, base: string) {
 }
 
 function largestFromSrcset(srcset: string | null): string | null {
-  if (!srcset) return null;
-  const candidates = srcset
-    .split(',')
-    .map((part) => part.trim().split(/\s+/))
-    .filter(([url]) => url)
-    .map(([url, size]) => ({ url: url!, weight: parseFloat(size ?? '1') || 1 }));
+  const candidates = srcset ? parseSrcset(srcset) : [];
   return candidates.sort((a, b) => b.weight - a.weight)[0]?.url ?? null;
+}
+
+/**
+ * The candidates in a srcset, parsed the way browsers do (HTML spec): a URL runs until whitespace, so
+ * commas inside it are kept. Image CDNs put commas in their URLs (Substack: `w_424,c_limit,…`), which
+ * a split on "," cuts into fragments.
+ */
+export function parseSrcset(srcset: string): { url: string; weight: number }[] {
+  const candidates: { url: string; weight: number }[] = [];
+  let i = 0;
+  while (i < srcset.length) {
+    while (i < srcset.length && /[\s,]/.test(srcset[i]!)) i++; // separators before a candidate
+    const start = i;
+    while (i < srcset.length && !/\s/.test(srcset[i]!)) i++;
+    let url = srcset.slice(start, i);
+    if (!url) break;
+    let descriptor = '';
+    if (url.endsWith(',')) {
+      url = url.replace(/,+$/, ''); // "a.jpg, b.jpg": the comma ends this candidate, no descriptor
+    } else {
+      const end = srcset.indexOf(',', i);
+      descriptor = srcset.slice(i, end < 0 ? srcset.length : end).trim();
+      i = end < 0 ? srcset.length : end + 1;
+    }
+    if (url) candidates.push({ url, weight: parseFloat(descriptor) || 1 });
+  }
+  return candidates;
 }
 
 interface LocalImage {
