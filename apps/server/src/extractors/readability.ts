@@ -1,5 +1,5 @@
 import { Readability } from '@mozilla/readability';
-import { parseDocument } from '../html.ts';
+import { parseDocument, parseFragment } from '../html.ts';
 import { config } from '../config.ts';
 import { httpGet } from '../http.ts';
 import { podcastSignals } from './podcast.ts';
@@ -59,9 +59,22 @@ export function extractFromHtml(html: string, pageUrl: string): ExtractedArticle
     doc.querySelector('time[datetime]')?.getAttribute('datetime') ??
     null;
 
+  const jsonLd = jsonLdNodes(doc); // read first: Readability strips <script>s from the document it parses
+
   const article = new Readability(doc).parse();
   if (!article?.content || !article.textContent?.trim()) {
-    throw new ExtractionError('Could not find article content on this page');
+    // Job boards like Ashby render in the browser, but still embed the whole posting as JSON-LD.
+    const job = jobPostingArticle(jsonLd);
+    if (!job) throw new ExtractionError('Could not find article content on this page');
+    return {
+      kind: 'article',
+      hasVideo,
+      ...job,
+      byline: null,
+      excerpt: null,
+      leadImage: leadImage ? new URL(leadImage, pageUrl).href : null,
+      baseUrl: pageUrl,
+    };
   }
 
   const publishedAt = published ? Date.parse(published) : NaN;
@@ -82,3 +95,64 @@ export function extractFromHtml(html: string, pageUrl: string): ExtractedArticle
     publishedAt: Number.isNaN(publishedAt) ? null : publishedAt,
   };
 }
+
+// ---- job postings ----
+
+type LdNode = Record<string, any>;
+
+/** Every JSON-LD object on the page: top level, inside arrays, and inside @graph. */
+function jsonLdNodes(doc: Document): LdNode[] {
+  const nodes: LdNode[] = [];
+  const visit = (v: unknown) => {
+    if (Array.isArray(v)) return v.forEach(visit);
+    if (!v || typeof v !== 'object') return;
+    nodes.push(v as LdNode);
+    visit((v as LdNode)['@graph']);
+  };
+  for (const script of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    try {
+      visit(JSON.parse(script.textContent ?? ''));
+    } catch {
+      // Malformed JSON-LD is common; skip it.
+    }
+  }
+  return nodes;
+}
+
+/** A schema.org JobPosting as an article: a header (company, location, type) above its description. */
+function jobPostingArticle(jsonLd: LdNode[]): Pick<ExtractedArticle, 'title' | 'siteName' | 'html' | 'publishedAt'> | null {
+  const job = jsonLd.find((n) => [n['@type']].flat().includes('JobPosting'));
+  const title = str(job?.title);
+  let description = str(job?.description);
+  if (!job || !title || !description) return null;
+  // Some boards HTML-escape the description (`&lt;p&gt;`) instead of embedding the markup.
+  if (!/<[a-z]/i.test(description) && /&lt;[a-z]/i.test(description)) description = parseFragment(description).textContent ?? '';
+
+  const company = str(job.hiringOrganization?.name) ?? str(job.hiringOrganization);
+  const locations = [job.jobLocation].flat().map((place: LdNode | null) => addressText(place?.address)).filter(present);
+  const employment = [job.employmentType].flat().map(str).filter(present).map((t) => sentenceCase(t.replace(/_/g, ' ')));
+  const remote = [job.jobLocationType].flat().includes('TELECOMMUTE') ? ['Remote'] : [];
+  const facts = [...new Set([...locations, ...employment, ...remote])].map(escapeHtml);
+  const header = [company ? `<strong>${escapeHtml(company)}</strong>` : null, ...facts].filter(Boolean).join(' · ');
+
+  const posted = Date.parse(job.datePosted ?? '');
+  return {
+    title: company ? `${title} · ${company}` : title,
+    siteName: company,
+    html: `${header ? `<p>${header}</p>` : ''}${description}`,
+    publishedAt: Number.isNaN(posted) ? null : posted,
+  };
+}
+
+/** A PostalAddress (or plain string) as "Locality, Region, Country". */
+function addressText(address: unknown): string | null {
+  if (typeof address === 'string') return str(address);
+  const a = (address ?? {}) as LdNode;
+  const parts = [a.addressLocality, a.addressRegion, a.addressCountry?.name ?? a.addressCountry].map(str).filter(Boolean);
+  return parts.length ? [...new Set(parts)].join(', ') : null;
+}
+
+const present = <T>(v: T | null): v is T => v !== null;
+const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
