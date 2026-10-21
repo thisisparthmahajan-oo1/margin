@@ -246,7 +246,9 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
   };
 
   const togglePanel = (p: Panel) => setPanel((cur) => (cur === p ? null : p));
-  const published = b.publishedAt ? new Date(b.publishedAt).toLocaleDateString(undefined, { dateStyle: 'medium' }) : null;
+  // Sites often give only a day, so the published date has no time; Margin knows when it saved to the minute.
+  const published = b.publishedAt ? `Published ${new Date(b.publishedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}` : null;
+  const saved = `Saved ${new Date(b.savedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`;
 
   return (
     <>
@@ -347,7 +349,7 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
           </p>
           <h1 className="article-title">{b.title}</h1>
           <p className="article-byline">
-            {[b.byline, published, b.kind === 'article' ? `${lengthLabel(b)} read` : lengthLabel(b)].filter(Boolean).map((part) => (
+            {[b.byline, published, saved, b.kind === 'article' ? `${lengthLabel(b)} read` : lengthLabel(b)].filter(Boolean).map((part) => (
               <span key={part}>{part}</span>
             ))}
           </p>
