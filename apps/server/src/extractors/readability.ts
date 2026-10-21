@@ -61,6 +61,7 @@ export function extractFromHtml(html: string, pageUrl: string): ExtractedArticle
 
   const jsonLd = jsonLdNodes(doc); // read first: Readability strips <script>s from the document it parses
 
+  prepareForReadability(doc);
   const article = new Readability(doc).parse();
   if (!article?.content || !article.textContent?.trim()) {
     // Job boards like Ashby render in the browser, but still embed the whole posting as JSON-LD.
@@ -94,6 +95,29 @@ export function extractFromHtml(html: string, pageUrl: string): ExtractedArticle
     baseUrl: pageUrl,
     publishedAt: Number.isNaN(publishedAt) ? null : publishedAt,
   };
+}
+
+// ---- steering Readability ----
+
+/** Readability's test for an element holding the byline (its `REGEXPS.byline`, plus rel/itemprop). */
+const BYLINE_MARKER = /byline|author|dateline|writtenby|p-author/i;
+
+/** Fixes for page shapes Readability misreads. Mutates `doc`. */
+function prepareForReadability(doc: Document) {
+  // A quote's credit ("Albert Einstein & Leopold Infeld" under an epigraph) isn't the article's author.
+  // Readability would take it as the byline and cut it, and often the quote, out of the text.
+  for (const el of doc.querySelectorAll('blockquote *, figcaption *, figure *, cite')) {
+    if (BYLINE_MARKER.test(`${el.getAttribute('class') ?? ''} ${el.id}`)) el.removeAttribute('class');
+    if (el.id && BYLINE_MARKER.test(el.id)) el.removeAttribute('id');
+    if (el.getAttribute('rel') === 'author') el.removeAttribute('rel');
+    if (/author/i.test(el.getAttribute('itemprop') ?? '')) el.removeAttribute('itemprop');
+  }
+  // A container of nothing but figures (a figure grid) looks like image clutter to Readability's
+  // clean-up, which drops it whole. Lifted out of it, each figure is kept like any other.
+  for (const grid of doc.querySelectorAll('div')) {
+    const children = [...grid.children];
+    if (children.length > 1 && children.every((c) => c.tagName === 'FIGURE')) grid.replaceWith(...children);
+  }
 }
 
 // ---- job postings ----

@@ -22,6 +22,26 @@ describe('readability extraction', () => {
     expect(a.publishedAt).toBe(Date.parse('2024-05-01T00:00:00Z'));
   });
 
+  it('does not take a quote’s credit as the byline', () => {
+    const html = `<html><head><title>T</title></head><body><article><figure><blockquote>A short quote.</blockquote><figcaption><span class="quote-author">Ada Lovelace</span></figcaption></figure><p class="byline">By Real Writer</p>${paragraphs}</article></body></html>`;
+    const a = extractFromHtml(html, 'https://example.com/post');
+    expect(a.byline).toBe('By Real Writer');
+    expect(a.html).toContain('Ada Lovelace');
+  });
+
+  it('keeps figures that sit together in a grid', () => {
+    const figure = (n: number) => `<figure><img src="/f${n}.png" alt="Figure ${n}"><figcaption>Caption ${n}.</figcaption></figure>`;
+    const html = `<html><head><title>T</title></head><body><article>${paragraphs}<h2>Figures</h2><div class="grid">${figure(1)}${figure(2)}${figure(3)}</div>${paragraphs}</article></body></html>`;
+    const a = extractFromHtml(html, 'https://example.com/post');
+    for (const n of [1, 2, 3]) expect(a.html).toContain(`Caption ${n}.`);
+  });
+
+  it('reads a design-heavy project page (Jeva)', () => {
+    const a = extractFromHtml(fixture('jeva.html'), 'https://liqiiiii.github.io/Jeva/');
+    expect(a.byline).toBe('Qi Li, Xinchao Wang*'); // not the opening epigraph's "Albert Einstein & Leopold Infeld"
+    for (const f of ['set_conditioned_decision', 'coverage_competition', 'jeva_option_reuse']) expect(a.html).toContain(`assets/${f}.png`);
+  });
+
   describe('job postings', () => {
     const page = (ld: unknown) =>
       `<html><head><title>Jobs</title><script type="application/ld+json">${JSON.stringify(ld)}</script></head><body><div id="root"></div></body></html>`;
