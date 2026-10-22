@@ -1179,6 +1179,18 @@ a.row-link:hover .row-title {
 .selection-toolbar button:hover {
   background: rgb(255 255 255 / 0.14);
 }
+/* Touch screens: docked at the bottom, clear of the phone's own Copy / Select all menu, under the thumb. */
+.selection-toolbar.docked {
+  position: fixed;
+  top: auto;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  padding: 6px;
+  font-size: 15px;
+}
+.selection-toolbar.docked button {
+  padding: 10px 14px;
+}
 
 .popover {
   position: absolute;

@@ -195,28 +195,32 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
 
   // ---- selection -> highlight toolbar ----
 
+  // On touch screens the phone's own menu (Copy, Select all) sits right above the selection, where
+  // the toolbar would go, so there the toolbar is docked at the bottom of the screen instead.
+  const docked = useMediaQuery('(pointer: coarse)');
+  /** A press on the toolbar is under way: on touch screens it can collapse the selection before the tap lands. */
+  const pressingToolbar = useRef(false);
+
   useEffect(() => {
     const onSelectionEnd = () =>
       setTimeout(() => {
         const sel = window.getSelection();
         const root = contentRef.current;
         if (!sel || sel.isCollapsed || !root || !root.contains(sel.anchorNode)) {
-          setSelection(null);
+          if (!pressingToolbar.current) setSelection(null);
           return;
         }
         const range = sel.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         setSelection({ top: rect.top + window.scrollY, left: rect.left + rect.width / 2, range: range.cloneRange() });
       }, 0);
-    document.addEventListener('mouseup', onSelectionEnd);
-    document.addEventListener('touchend', onSelectionEnd);
-    document.addEventListener('keyup', onSelectionEnd);
+    // Dragging the selection handles on a phone fires no touchend on the page, only selectionchange.
+    const events = docked ? ['selectionchange'] : ['mouseup', 'touchend', 'keyup'];
+    for (const e of events) document.addEventListener(e, onSelectionEnd);
     return () => {
-      document.removeEventListener('mouseup', onSelectionEnd);
-      document.removeEventListener('touchend', onSelectionEnd);
-      document.removeEventListener('keyup', onSelectionEnd);
+      for (const e of events) document.removeEventListener(e, onSelectionEnd);
     };
-  }, []);
+  }, [docked]);
 
   const saveSelection = async (withNote: boolean) => {
     if (!selection || !contentRef.current) return;
@@ -436,7 +440,14 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
       </article>
 
       {selection && (
-        <div className="selection-toolbar" style={{ top: selection.top - 48, left: selection.left }} onMouseDown={(e) => e.preventDefault()}>
+        <div
+          className={`selection-toolbar${docked ? ' docked' : ''}`}
+          style={docked ? undefined : { top: selection.top - 48, left: selection.left }}
+          onMouseDown={(e) => e.preventDefault()}
+          onPointerDown={() => (pressingToolbar.current = true)}
+          onClickCapture={() => setTimeout(() => (pressingToolbar.current = false))}
+          onPointerCancel={() => (pressingToolbar.current = false)}
+        >
           <button onClick={() => saveSelection(false)}>
             <Highlighter size={15} /> Highlight
           </button>
@@ -549,6 +560,17 @@ function HighlightPopover({
       </div>
     </div>
   );
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const onChange = () => setMatches(list.matches);
+    list.addEventListener('change', onChange);
+    return () => list.removeEventListener('change', onChange);
+  }, [query]);
+  return matches;
 }
 
 /** Closes on a press anywhere outside `ref`. */
