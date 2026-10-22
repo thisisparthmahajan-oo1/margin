@@ -1,4 +1,4 @@
-import type { Bookmark, Folder, Highlight, Tag, UpdateBookmarkRequest, TextQuoteAnchor } from '@margin/shared';
+import type { Bookmark, CuratorRequest, Folder, Highlight, RequestStatus, Tag, UpdateBookmarkRequest, TextQuoteAnchor } from '@margin/shared';
 import Dexie, { type EntityTable } from 'dexie';
 
 /** A change made on this device that the server hasn't acknowledged yet. Flushed in `seq` order. */
@@ -17,7 +17,10 @@ export type OutboxOp =
   | { type: 'tag.delete'; id: string }
   | { type: 'highlight.create'; id: string; bookmarkId: string; anchor: TextQuoteAnchor; note: string | null }
   | { type: 'highlight.update'; id: string; note: string | null }
-  | { type: 'highlight.delete'; id: string };
+  | { type: 'highlight.delete'; id: string }
+  | { type: 'request.create'; id: string; text: string; bookmarkId: string | null; anchor: TextQuoteAnchor | null; for: string }
+  | { type: 'request.update'; id: string; change: { text: string } | { status: RequestStatus } }
+  | { type: 'request.delete'; id: string };
 
 export interface OutboxEntry {
   seq?: number;
@@ -47,6 +50,7 @@ export const db = new Dexie('margin') as Dexie & {
   folders: EntityTable<Folder, 'id'>;
   tags: EntityTable<Tag, 'id'>;
   highlights: EntityTable<Highlight, 'id'>;
+  requests: EntityTable<CuratorRequest, 'id'>;
   outbox: EntityTable<OutboxEntry, 'seq'>;
   meta: EntityTable<Meta, 'key'>;
   media: EntityTable<MediaEntry, 'path'>;
@@ -127,3 +131,5 @@ db.version(7)
         b.audio ??= null;
       }),
   );
+
+db.version(8).stores({ requests: 'id, bookmarkId, status, createdAt' });

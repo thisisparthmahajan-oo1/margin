@@ -81,6 +81,8 @@ export interface Suggestion {
   by: string;
   reason: string;
   at: number;
+  /** The request this item answers, when the agent added it in answer to one. */
+  requestId?: string;
 }
 
 export const SUGGESTION_REASON_MAX = 300;
@@ -120,7 +122,45 @@ export interface Highlight {
   updatedAt: number;
 }
 
-export type EntityName = 'bookmark' | 'folder' | 'highlight' | 'tag';
+/**
+ * Something you asked an agent (an API token, e.g. `curator`) to find or explain. One-off, not a
+ * standing interest: the agent links answers and keeps a status line until you mark it completed.
+ */
+export interface CuratorRequest {
+  id: string;
+  /** Trimmed, 1–REQUEST_TEXT_MAX characters. Only you can change it. */
+  text: string;
+  /** The API token name it's addressed to. */
+  for: string;
+  /** Set when asked from an article. Kept when that article is deleted. */
+  bookmarkId: string | null;
+  /** Set when asked from a passage. */
+  anchor: TextQuoteAnchor | null;
+  status: RequestStatus;
+  completedAt: number | null;
+  /** The agent's status line (REQUEST_REPLY_MAX characters at most). */
+  reply: { text: string; updatedAt: number } | null;
+  /** Items the agent linked as answers, in the order it linked them. */
+  answers: RequestAnswer[];
+  createdAt: number;
+  /** Bumped by any change, including the agent's. */
+  updatedAt: number;
+}
+
+export const REQUEST_STATUSES = ['open', 'completed'] as const;
+export type RequestStatus = (typeof REQUEST_STATUSES)[number];
+
+export interface RequestAnswer {
+  bookmarkId: string;
+  addedAt: number;
+}
+
+export const REQUEST_TEXT_MAX = 1000;
+export const REQUEST_REPLY_MAX = 300;
+/** Who requests are addressed to when the client doesn't say. */
+export const DEFAULT_REQUEST_AGENT = 'curator';
+
+export type EntityName = 'bookmark' | 'folder' | 'highlight' | 'tag' | 'request';
 
 export interface Deletion {
   entity: EntityName;
@@ -231,7 +271,11 @@ export interface CreateBookmarkRequest {
   folderId?: string | null;
   addTagIds?: string[];
   /** Why it was suggested. Who suggested it comes from the credentials the request was sent with. */
-  suggestion?: { reason: string };
+  suggestion?: {
+    reason: string;
+    /** An open request addressed to this token: the item is linked to it as an answer (not on a 409). */
+    requestId?: string;
+  };
   /** Never re-save: when the address is already saved, answer 409 (`AlreadySavedResponse`) and leave that item alone. */
   ifNew?: boolean;
 }
@@ -292,6 +336,22 @@ export interface UpdateHighlightRequest {
   note: string | null;
 }
 
+export interface CreateRequestRequest {
+  id?: string;
+  text: string;
+  bookmarkId?: string | null;
+  anchor?: TextQuoteAnchor | null;
+  /** Defaults to DEFAULT_REQUEST_AGENT; must be the name of a configured API token. */
+  for?: string;
+}
+
+/** One kind of change per call: yours (`text`, `status`) or the agent's (`reply`). */
+export type UpdateRequestRequest = { text: string } | { status: RequestStatus } | { reply: string };
+
+export interface AddAnswerRequest {
+  bookmarkId: string;
+}
+
 export interface SyncResponse {
   /** Pass back as `since` on the next sync. */
   cursor: number;
@@ -309,6 +369,8 @@ export interface SyncResponse {
   folders: Folder[];
   highlights: Highlight[];
   tags: Tag[];
+  /** All of them, completed included. */
+  requests: CuratorRequest[];
   deletions: Deletion[];
 }
 

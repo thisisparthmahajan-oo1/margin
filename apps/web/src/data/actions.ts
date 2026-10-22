@@ -1,11 +1,13 @@
 import {
   applyTagChange,
+  DEFAULT_REQUEST_AGENT,
   fileKeyFor,
   PDF_CONTENT_TYPE,
   uploadUrlFor,
   type Bookmark,
   type BookmarkSource,
   type Relevance,
+  type RequestStatus,
   type TextQuoteAnchor,
   type UpdateBookmarkRequest,
 } from '@margin/shared';
@@ -19,7 +21,7 @@ import { syncNow } from './sync.ts';
  * Works the same online and offline.
  */
 async function commit(apply: () => Promise<unknown>, ...ops: OutboxOp[]) {
-  await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.tags, db.outbox], async () => {
+  await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.tags, db.requests, db.outbox], async () => {
     await apply();
     for (const op of ops) await db.outbox.add({ op });
   });
@@ -129,7 +131,10 @@ export async function saveProgress(id: string, progress: number) {
   await updateBookmark(id, { progress });
 }
 
-/** Hard delete on this device right away (article, highlights, unused images); the server and other devices follow via sync. */
+/**
+ * Hard delete on this device right away (article, highlights, unused images); the server and other devices follow via sync.
+ * Requests asked from it are kept: they show the source as removed.
+ */
 export async function deleteBookmark(id: string) {
   await commit(async () => {
     await db.highlights.where('bookmarkId').equals(id).delete();
@@ -216,3 +221,32 @@ export const updateHighlightNote = (id: string, note: string | null) =>
 
 export const deleteHighlight = (id: string) =>
   commit(() => db.highlights.delete(id), { type: 'highlight.delete', id });
+
+/** Asks the curator for something, from a passage of an article or on its own. */
+export async function createRequest(text: string, from: { bookmarkId: string; anchor: TextQuoteAnchor | null } | null = null) {
+  const now = Date.now();
+  const id = crypto.randomUUID();
+  const bookmarkId = from?.bookmarkId ?? null;
+  const anchor = from?.anchor ?? null;
+  const agent = DEFAULT_REQUEST_AGENT;
+  await commit(
+    () =>
+      db.requests.put({
+        id, text, for: agent, bookmarkId, anchor, status: 'open', completedAt: null, reply: null, answers: [],
+        createdAt: now, updatedAt: now,
+      }),
+    { type: 'request.create', id, text, bookmarkId, anchor, for: agent },
+  );
+  return id;
+}
+
+export const updateRequestText = (id: string, text: string) =>
+  commit(() => db.requests.update(id, { text, updatedAt: Date.now() }), { type: 'request.update', id, change: { text } });
+
+export const setRequestStatus = (id: string, status: RequestStatus) =>
+  commit(
+    () => db.requests.update(id, { status, completedAt: status === 'completed' ? Date.now() : null, updatedAt: Date.now() }),
+    { type: 'request.update', id, change: { status } },
+  );
+
+export const deleteRequest = (id: string) => commit(() => db.requests.delete(id), { type: 'request.delete', id });

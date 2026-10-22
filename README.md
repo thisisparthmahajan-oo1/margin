@@ -158,6 +158,32 @@ A separate program can add suggestions through the API with its own token (`API_
 
 The full contract is in `daily_newsletter/docs/MARGINR_REQUIREMENTS.md`.
 
+### Requests (asking the curator)
+
+A request is a one-off ask, like "Is this available now?" or "a hands-on guide to semantic VAD". The curator works on it, links its answers and keeps a status line until you mark the request completed. Nothing closes or expires on its own.
+
+How you make and manage them:
+- **Asking:** select text in the reader and choose **Ask curator**. The passage is marked in blue, and tapping it shows the request. For a request not tied to an article, use **New request** in the **Requests** view.
+- **The Requests view:** open requests come first. Each shows your text, the passage and its article, the curator's latest line, and the articles it added in answer. You can edit a request, complete it, reopen it or delete it.
+- **Markers:** list rows show **Asked** on articles with an open request. An answer's chip reads **Answers your request: "…"** and links to the request.
+- **Deleting an article** keeps the requests asked from it; they show the source as removed.
+
+API (`CuratorRequest` in `packages/shared`). Requests come in `GET /api/sync` as `requests[]`, completed ones included, and deletions as `deletions[]`.
+
+| Call | You (APP_TOKEN / device) | The token the request is `for` | Any other token |
+|---|---|---|---|
+| `POST /api/requests {id, text, bookmarkId?, anchor?, for?}` | ✓ | 403 | 403 |
+| `PATCH /api/requests/:id {text}` or `{status: 'open' \| 'completed'}` | ✓ | 403 | 403 |
+| `DELETE /api/requests/:id` | ✓ | 403 | 403 |
+| `PATCH /api/requests/:id {reply}` (its status line, 300 characters at most) | 403 | ✓ | 403 |
+| `POST /api/requests/:id/answers {bookmarkId}` | 403 | ✓, or 409 once completed | 403 |
+| `POST /api/bookmarks` with `suggestion: {reason, requestId}` | 403 | ✓, or 409 once completed | 403 |
+
+Details:
+- **`for`:** defaults to `curator` and must be the name of a configured API token.
+- **Linking an answer:** works for any item already in the library. Linking the same item twice changes nothing.
+- **Saving with a `requestId`:** the new item is linked in the same call. On an `ifNew` 409 nothing is linked, so the agent calls the answers endpoint with the existing item's id.
+
 ### X Articles
 
 x.com shows nothing without a login, so X posts are read through the public [FxTwitter API](https://github.com/FxEmbed/FxEmbed). Article bodies are converted from X's rich-text blocks into clean HTML (`apps/server/src/extractors/x-article.ts`). Paste the **post link** (`x.com/<user>/status/<id>`). Regular posts are saved too, as short text.

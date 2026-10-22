@@ -32,6 +32,7 @@ import { Shell } from './components/Shell.tsx';
 import { AddPage } from './pages/AddPage.tsx';
 import { ListPage } from './pages/ListPage.tsx';
 import { NotesPage } from './pages/NotesPage.tsx';
+import { RequestsPage } from './pages/RequestsPage.tsx';
 import { ReaderPage } from './pages/ReaderPage.tsx';
 import { SearchPage } from './pages/SearchPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
@@ -49,6 +50,7 @@ const router = createBrowserRouter([
       { path: '/folder/:folderId', element: <ListPage /> },
       { path: '/tag/:tagId', element: <ListPage /> },
       { path: '/notes', element: <NotesPage /> },
+      { path: '/requests', element: <RequestsPage /> },
       { path: '/search', element: <SearchPage /> },
       { path: '/settings', element: <SettingsPage /> },
     ],

@@ -11,6 +11,7 @@ import { bookmarkRoutes } from './routes/bookmarks.ts';
 import { fileRoutes } from './routes/files.ts';
 import { folderRoutes } from './routes/folders.ts';
 import { highlightRoutes } from './routes/highlights.ts';
+import { requestRoutes } from './routes/requests.ts';
 import { mediaRoutes } from './routes/media.ts';
 import { searchRoutes } from './routes/search.ts';
 import { syncRoutes } from './routes/sync.ts';
@@ -47,6 +48,7 @@ export function createApp(opts: AppOptions) {
     '/api/*',
     except(PUBLIC_API, async (c, next) => {
       const bearer = c.req.header('authorization')?.match(/^Bearer (.+)$/)?.[1] ?? '';
+      c.set('agents', apiTokens.map(([name]) => name));
       const named = apiTokens.find(([, secret]) => safeEqual(bearer, secret));
       if (named) c.set('caller', named[0]);
       // Devices send a session; you may also send APP_TOKEN itself. Without APP_TOKEN (local dev) the API is open.
@@ -93,6 +95,7 @@ export function createApp(opts: AppOptions) {
   app.route('/api/folders', folderRoutes);
   app.route('/api/tags', tagRoutes);
   app.route('/api/highlights', highlightRoutes);
+  app.route('/api/requests', requestRoutes);
   app.route('/api/search', searchRoutes);
   app.route('/api/sync', syncRoutes);
   app.route('/api/media', mediaRoutes);

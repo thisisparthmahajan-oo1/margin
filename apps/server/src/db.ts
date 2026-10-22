@@ -1,4 +1,4 @@
-import { mediaPathsIn, type Bookmark, type Deletion, type Folder, type Highlight, type Tag } from '@margin/shared';
+import { mediaPathsIn, type Bookmark, type CuratorRequest, type Deletion, type Folder, type Highlight, type Tag } from '@margin/shared';
 import { MongoClient, type Collection, type Db } from 'mongodb';
 
 // Stored shapes: the shared domain types keyed by `_id`, plus server-only fields.
@@ -14,6 +14,7 @@ export type BookmarkDoc = Omit<Bookmark, 'id'> & { _id: string } & BookmarkServe
 export type FolderDoc = Omit<Folder, 'id'> & { _id: string };
 export type HighlightDoc = Omit<Highlight, 'id'> & { _id: string };
 export type TagDoc = Omit<Tag, 'id'> & { _id: string };
+export type RequestDoc = Omit<CuratorRequest, 'id'> & { _id: string };
 /** `expiresAt` drives a TTL index: deletion records only need to live long enough for devices to sync them. */
 export type DeletionDoc = Deletion & { _id: string; expiresAt: Date };
 /**
@@ -33,6 +34,7 @@ export interface Collections {
   folders: Collection<FolderDoc>;
   highlights: Collection<HighlightDoc>;
   tags: Collection<TagDoc>;
+  requests: Collection<RequestDoc>;
   deletions: Collection<DeletionDoc>;
   uploads: Collection<UploadDoc>;
 }
@@ -44,6 +46,7 @@ export function collections(db: Db): Collections {
     folders: db.collection<FolderDoc>('folders'),
     highlights: db.collection<HighlightDoc>('highlights'),
     tags: db.collection<TagDoc>('tags'),
+    requests: db.collection<RequestDoc>('requests'),
     deletions: db.collection<DeletionDoc>('deletions'),
     uploads: db.collection<UploadDoc>('uploads'),
   };
@@ -70,6 +73,8 @@ export async function ensureIndexes(c: Collections) {
     c.tags.createIndex({ name: 1 }, { unique: true, collation: TAG_NAME_COLLATION }),
     c.highlights.createIndex({ updatedAt: 1 }),
     c.highlights.createIndex({ bookmarkId: 1 }),
+    c.requests.createIndex({ updatedAt: 1 }),
+    c.requests.createIndex({ bookmarkId: 1 }),
     c.deletions.createIndex({ deletedAt: 1 }),
     c.deletions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     c.uploads.createIndex({ createdAt: 1 }),

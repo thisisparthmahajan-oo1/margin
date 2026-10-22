@@ -10,6 +10,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../deps.ts';
 import type { Store } from '../store.ts';
 import { extractorFor } from '../extractors/index.ts';
+import { answerDenied } from './requests.ts';
 import { canonicalize, parseUserUrl } from '../url.ts';
 
 export const bookmarkRoutes = new Hono<AppEnv>()
@@ -27,6 +28,13 @@ export const bookmarkRoutes = new Hono<AppEnv>()
         return c.json({ error: `A suggestion needs a reason of 1–${SUGGESTION_REASON_MAX} characters` }, 400);
       }
       suggestion = { by: c.var.caller, reason, at: Date.now() };
+      const requestId = body.suggestion.requestId;
+      if (requestId) {
+        if (!(await store.getRequest(requestId))) return c.json({ error: 'Unknown request' }, 400);
+        const denied = await answerDenied(c, store, requestId);
+        if (denied) return denied;
+        suggestion.requestId = requestId;
+      }
     }
     const { bookmark, created } = await store.saveBookmark({
       id: body.id,
@@ -39,6 +47,8 @@ export const bookmarkRoutes = new Hono<AppEnv>()
       ifNew: body.ifNew === true,
     });
     if (!created && body.ifNew) return c.json<AlreadySavedResponse>({ error: 'Already saved', bookmark }, 409);
+    // Checked above, so this links it; the request can only have been completed in the moments between.
+    if (suggestion?.requestId) await store.addAnswer(suggestion.requestId, bookmark.id);
     if (created || bookmark.status === 'failed') {
       if (!created) await store.markPending(bookmark.id);
       ingestor.enqueue(bookmark.id);

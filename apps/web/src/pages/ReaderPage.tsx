@@ -1,4 +1,4 @@
-import { formatBytes, lengthLabel, type Bookmark, type Highlight } from '@margin/shared';
+import { formatBytes, lengthLabel, REQUEST_TEXT_MAX, type Bookmark, type Highlight, type TextQuoteAnchor } from '@margin/shared';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Archive,
@@ -9,6 +9,7 @@ import {
   Headphones,
   Heart,
   Highlighter,
+  MessageCircleQuestion,
   Pause,
   Play,
   Square,
@@ -19,11 +20,13 @@ import {
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MoveMenu } from '../components/MoveMenu.tsx';
+import { RequestDetails } from '../components/RequestDetails.tsx';
 import { RelevanceButtons } from '../components/RelevanceButtons.tsx';
 import { TagMenu } from '../components/TagMenu.tsx';
 import { Toasts } from '../components/Toasts.tsx';
 import {
   createHighlight,
+  createRequest,
   deleteHighlight,
   saveProgress,
   toggleArchive,
@@ -33,7 +36,7 @@ import {
 } from '../data/actions.ts';
 import { fileBlob } from '../data/files.ts';
 import { localizeMedia } from '../data/media.ts';
-import { canOpen, domainOf, useBookmark, useHighlights } from '../data/queries.ts';
+import { canOpen, domainOf, requestPreview, useBookmark, useHighlights, useRequest, useRequestsFor } from '../data/queries.ts';
 import { FONTS, THEMES, useAppSettings, useReaderSettings } from '../data/settings.ts';
 import { toast } from '../data/toast.ts';
 import { clearHighlights, describeRange, highlight } from '../reader/anchor.ts';
@@ -98,12 +101,17 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
   const [params] = useSearchParams();
   const { autoArchive } = useAppSettings();
   const highlights = useHighlights(b.id);
+  const requests = useRequestsFor(b.id);
+  const answered = useRequest(b.suggestion?.requestId);
   const contentRef = useRef<HTMLDivElement>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [toolbarHidden, setToolbarHidden] = useState(false);
   const [progress, setProgress] = useState(b.progress);
   const [selection, setSelection] = useState<{ top: number; left: number; range: Range } | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<{ id: string; top: number; left: number } | null>(null);
+  /** Writing a request about a passage; nothing is saved until it's sent. */
+  const [asking, setAsking] = useState<{ anchor: TextQuoteAnchor; top: number; left: number } | null>(null);
+  const [activeRequest, setActiveRequest] = useState<{ id: string; top: number; left: number } | null>(null);
   const speech = useSpeech(contentRef);
   const hasText = b.contentHtml !== null && b.status === 'ready';
   const [view, setView] = useState<View>(hasText ? 'text' : 'original');
@@ -126,11 +134,15 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
   useLayoutEffect(() => {
     const root = contentRef.current;
     if (!root) return;
-    clearHighlights(root, 'mark[data-hl]');
+    // Clear both kinds before painting either: clearing re-joins text nodes the other kind's marks split.
+    clearHighlights(root, 'mark[data-hl], mark[data-req]');
     for (const h of highlights) {
       highlight(root, h.anchor, { 'data-hl': h.id, class: h.note ? 'hl has-note' : 'hl' });
     }
-  }, [highlights, b.contentHtml, showing]);
+    for (const r of requests) {
+      if (r.anchor) highlight(root, r.anchor, { 'data-req': r.id, class: r.status === 'open' ? 'req' : 'req done' });
+    }
+  }, [highlights, requests, b.contentHtml, showing]);
 
   // ---- reading position ----
 
@@ -138,14 +150,20 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
   useLayoutEffect(() => {
     if (restored.current || !contentRef.current) return;
     const target = params.get('hl');
+    const askedId = params.get('req');
     if (target && !highlights.some((h) => h.id === target)) return; // wait for highlights to load
+    if (askedId && !requests.some((r) => r.id === askedId)) return; // and requests
     restored.current = true;
-    const mark = target && contentRef.current.querySelector(`mark[data-hl="${CSS.escape(target)}"]`);
-    if (mark) mark.scrollIntoView({ block: 'center' });
-    else if (b.progress > 0.01 && b.progress < 0.99) {
+    const mark =
+      (target && contentRef.current.querySelector(`mark[data-hl="${CSS.escape(target)}"]`)) ||
+      (askedId && contentRef.current.querySelector(`mark[data-req="${CSS.escape(askedId)}"]`));
+    if (mark) {
+      mark.scrollIntoView({ block: 'center' });
+      if (askedId) openRequest(mark);
+    } else if (b.progress > 0.01 && b.progress < 0.99) {
       window.scrollTo(0, b.progress * (document.documentElement.scrollHeight - window.innerHeight));
     } else window.scrollTo(0, 0);
-  }, [b.progress, params, highlights]);
+  }, [b.progress, params, highlights, requests]);
 
   useEffect(() => {
     let lastY = window.scrollY;
@@ -211,11 +229,33 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
     if (withNote) setActiveHighlight({ id: hid, top: top + 28, left });
   };
 
-  const onContentClick = (e: React.MouseEvent) => {
-    const mark = (e.target as HTMLElement).closest('mark[data-hl]');
-    if (!mark) return;
+  const askAboutSelection = () => {
+    if (!selection || !contentRef.current) return;
+    const anchor = describeRange(contentRef.current, selection.range);
+    window.getSelection()?.removeAllRanges();
+    const { top, left } = selection;
+    setSelection(null);
+    if (anchor) setAsking({ anchor, top: top + 28, left });
+  };
+
+  const below = (mark: Element) => {
     const rect = mark.getBoundingClientRect();
-    setActiveHighlight({ id: mark.getAttribute('data-hl')!, top: rect.bottom + window.scrollY + 8, left: rect.left + rect.width / 2 });
+    return { top: rect.bottom + window.scrollY + 8, left: rect.left + rect.width / 2 };
+  };
+  function openRequest(mark: Element) {
+    setActiveHighlight(null);
+    setActiveRequest({ id: mark.getAttribute('data-req')!, ...below(mark) });
+  }
+
+  const onContentClick = (e: React.MouseEvent) => {
+    // The innermost mark wins where a highlight and a request overlap.
+    const mark = (e.target as HTMLElement).closest('mark[data-hl], mark[data-req]');
+    if (!mark) return;
+    if (mark.hasAttribute('data-req')) openRequest(mark);
+    else {
+      setActiveRequest(null);
+      setActiveHighlight({ id: mark.getAttribute('data-hl')!, ...below(mark) });
+    }
   };
 
   // ---- keyboard ----
@@ -225,9 +265,11 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
       if (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'Escape') {
-        if (panel || activeHighlight) {
+        if (panel || activeHighlight || activeRequest || asking) {
           setPanel(null);
           setActiveHighlight(null);
+          setActiveRequest(null);
+          setAsking(null);
         } else goBack();
       } else if (e.key === 'a') void archiveAndLeave();
       else if (e.key === 't') setPanel('tags');
@@ -355,7 +397,14 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
           </p>
           {b.suggestion && (
             <p className="article-suggestion">
-              <strong>Suggested</strong> {b.suggestion.reason}
+              {answered ? (
+                <Link className="answers-request" to={`/requests#${answered.id}`}>
+                  <strong>Answers your request:</strong> “{requestPreview(answered.text)}”
+                </Link>
+              ) : (
+                <strong>Suggested</strong>
+              )}{' '}
+              {b.suggestion.reason}
             </p>
           )}
         </header>
@@ -394,7 +443,33 @@ function Reader({ bookmark: b }: { bookmark: Bookmark }) {
           <button onClick={() => saveSelection(true)}>
             <StickyNote size={15} /> Add note
           </button>
+          <button onClick={askAboutSelection}>
+            <MessageCircleQuestion size={15} /> Ask curator
+          </button>
         </div>
+      )}
+
+      {asking && (
+        <AskPopover
+          top={asking.top}
+          left={asking.left}
+          onClose={() => setAsking(null)}
+          onAsk={(text) => createRequest(text, { bookmarkId: b.id, anchor: asking.anchor })}
+        />
+      )}
+
+      {activeRequest && (
+        <RequestPopover
+          key={activeRequest.id}
+          top={activeRequest.top}
+          left={activeRequest.left}
+          onClose={() => setActiveRequest(null)}
+        >
+          {(() => {
+            const r = requests.find((x) => x.id === activeRequest.id);
+            return r && <RequestDetails request={r} showSource={false} onDeleted={() => setActiveRequest(null)} />;
+          })()}
+        </RequestPopover>
       )}
 
       {activeHighlight && (
@@ -438,12 +513,7 @@ function HighlightPopover({
 }) {
   const [note, setNote] = useState(h?.note ?? '');
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onDown = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
-    document.addEventListener('pointerdown', onDown);
-    return () => document.removeEventListener('pointerdown', onDown);
-  }, [onClose]);
+  useCloseOnOutsidePress(ref, onClose);
 
   if (!h) return null;
   const save = async () => {
@@ -477,6 +547,61 @@ function HighlightPopover({
           Save note
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Closes on a press anywhere outside `ref`. */
+function useCloseOnOutsidePress(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [ref, onClose]);
+}
+
+/** Writing a request about the selected passage. */
+function AskPopover({ top, left, onClose, onAsk }: { top: number; left: number; onClose: () => void; onAsk: (text: string) => Promise<unknown> }) {
+  const [text, setText] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useCloseOnOutsidePress(ref, onClose);
+  const send = async () => {
+    if (!text.trim()) return;
+    await onAsk(text.trim());
+    onClose();
+    toast('Asked the curator. Its answers appear in Requests.');
+  };
+  return (
+    <div className="popover note-popover ask-popover" ref={ref} style={{ top, left }}>
+      <textarea
+        autoFocus
+        rows={3}
+        maxLength={REQUEST_TEXT_MAX}
+        placeholder="What should the curator find or explain?"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send();
+        }}
+      />
+      <div className="popover-actions">
+        <button className="button subtle" onClick={onClose}>
+          Cancel
+        </button>
+        <button className="button primary" onClick={send} disabled={!text.trim()}>
+          Ask
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RequestPopover({ top, left, onClose, children }: { top: number; left: number; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useCloseOnOutsidePress(ref, onClose);
+  return (
+    <div className="popover request-popover" ref={ref} style={{ top, left }}>
+      {children}
     </div>
   );
 }

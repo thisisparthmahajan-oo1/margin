@@ -4,10 +4,12 @@ import {
   type AudioRef,
   type Bookmark,
   type BookmarkKind,
+  type CuratorRequest,
   type BookmarkSource,
   type EntityName,
   type Folder,
   type Highlight,
+  type RequestStatus,
   type SearchHit,
   type Tag,
   type StoredFile,
@@ -17,7 +19,16 @@ import {
   type UpdateBookmarkRequest,
   type VideoRef,
 } from '@margin/shared';
-import { TAG_NAME_COLLATION, type BookmarkDoc, type Collections, type FolderDoc, type HighlightDoc, type TagDoc, type UploadDoc } from './db.ts';
+import {
+  TAG_NAME_COLLATION,
+  type BookmarkDoc,
+  type Collections,
+  type FolderDoc,
+  type HighlightDoc,
+  type RequestDoc,
+  type TagDoc,
+  type UploadDoc,
+} from './db.ts';
 import type { FileStore } from './files.ts';
 import type { MediaStore } from './media.ts';
 
@@ -46,6 +57,7 @@ const CLIENT_PROJECTION = { plainText: 0, mediaPaths: 0 } as const;
 const toFolder = ({ _id, ...rest }: FolderDoc): Folder => ({ id: _id, ...rest });
 const toHighlight = ({ _id, ...rest }: HighlightDoc): Highlight => ({ id: _id, ...rest });
 const toTag = ({ _id, ...rest }: TagDoc): Tag => ({ id: _id, ...rest });
+const toRequest = ({ _id, ...rest }: RequestDoc): CuratorRequest => ({ id: _id, ...rest });
 
 /** Everything processing produces for an item; written in one go when it becomes ready. */
 export interface ExtractedContent {
@@ -138,11 +150,16 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
     const doc = await c.highlights.findOne({ _id: id });
     return doc ? toHighlight(doc) : null;
   };
+  const getRequest = async (id: string) => {
+    const doc = await c.requests.findOne({ _id: id });
+    return doc ? toRequest(doc) : null;
+  };
 
   return {
     getBookmark,
     getFolder,
     getHighlight,
+    getRequest,
     releaseFile,
 
     resave,
@@ -417,13 +434,79 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       return deletedCount > 0;
     },
 
+    /** Creates a request; with an id that already exists, returns that request (`created: false`). */
+    async createRequest(input: Pick<CuratorRequest, 'text' | 'for' | 'bookmarkId' | 'anchor'> & { id?: string }) {
+      const t = now();
+      const doc: RequestDoc = {
+        _id: input.id ?? randomUUID(),
+        text: input.text,
+        for: input.for,
+        bookmarkId: input.bookmarkId,
+        anchor: input.anchor,
+        status: 'open',
+        completedAt: null,
+        reply: null,
+        answers: [],
+        createdAt: t,
+        updatedAt: t,
+      };
+      try {
+        await c.requests.insertOne(doc);
+      } catch (e) {
+        // Sent twice (an outbox retry): the first one stands.
+        const existing = (e as { code?: number }).code === 11000 ? await getRequest(doc._id) : null;
+        if (existing) return { request: existing, created: false };
+        throw e;
+      }
+      return { request: toRequest(doc), created: true };
+    },
+
+    /** Your changes (text, status) or the agent's (reply). Null if the request doesn't exist. */
+    async updateRequest(
+      id: string,
+      change: { text: string } | { status: RequestStatus } | { reply: string },
+    ): Promise<CuratorRequest | null> {
+      const t = now();
+      const set: Partial<RequestDoc> =
+        'text' in change
+          ? { text: change.text }
+          : 'status' in change
+            ? { status: change.status, completedAt: change.status === 'completed' ? t : null }
+            : { reply: { text: change.reply, updatedAt: t } };
+      const doc = await c.requests.findOneAndUpdate({ _id: id }, { $set: { ...set, updatedAt: t } }, { returnDocument: 'after' });
+      return doc ? toRequest(doc) : null;
+    },
+
+    async deleteRequest(id: string): Promise<boolean> {
+      const { deletedCount } = await c.requests.deleteOne({ _id: id });
+      if (deletedCount) await recordDeletion('request', id);
+      return deletedCount > 0;
+    },
+
+    /**
+     * Links an item to an open request as an answer. Linking the same item again changes nothing.
+     * 'completed' when the request no longer takes answers; null when it doesn't exist.
+     */
+    async addAnswer(id: string, bookmarkId: string): Promise<CuratorRequest | 'completed' | null> {
+      const t = now();
+      const doc = await c.requests.findOneAndUpdate(
+        { _id: id, status: 'open', 'answers.bookmarkId': { $ne: bookmarkId } },
+        { $push: { answers: { bookmarkId, addedAt: t } }, $set: { updatedAt: t } },
+        { returnDocument: 'after' },
+      );
+      if (doc) return toRequest(doc);
+      const current = await getRequest(id);
+      if (!current) return null;
+      return current.status === 'open' ? current : 'completed'; // open: it was already an answer
+    },
+
     /**
      * Everything changed after `since`. The returned cursor lags by SYNC_OVERLAP_MS (see above).
      * A cursor older than DELETION_RETENTION_MS gets a full snapshot with `reset: true`.
      *
      * Items come in pages of about `pageBytes` (oldest change first), so a full sync of a large library
      * stays under the hosting response limit. A cut page sets `more` and a cursor at its last item;
-     * items sharing that item's `updatedAt` are never split across pages. Folders, tags, highlights and
+     * items sharing that item's `updatedAt` are never split across pages. Folders, tags, highlights, requests and
      * deletions are small and always sent in full (the next page may repeat some; applying them is idempotent).
      */
     async changesSince(requestedSince: number, { pageBytes = SYNC_PAGE_BYTES } = {}): Promise<SyncResponse> {
@@ -449,10 +532,11 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       }
       await changedItems.close();
 
-      const [folders, highlights, tags, deletions] = await Promise.all([
+      const [folders, highlights, tags, requests, deletions] = await Promise.all([
         c.folders.find(changed).toArray(),
         c.highlights.find(changed).toArray(),
         c.tags.find(changed).toArray(),
+        c.requests.find(changed).toArray(),
         reset ? [] : c.deletions.find({ deletedAt: { $gt: since } }).toArray(),
       ]);
       const settled = Math.max(t - SYNC_OVERLAP_MS, since);
@@ -465,6 +549,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         folders: folders.map(toFolder),
         highlights: highlights.map(toHighlight),
         tags: tags.map(toTag),
+        requests: requests.map(toRequest),
         deletions: deletions.map(({ entity, id, deletedAt }) => ({ entity, id, deletedAt })),
       };
     },

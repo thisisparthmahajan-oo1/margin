@@ -2,6 +2,7 @@ import {
   PDF_CONTENT_TYPE,
   type Bookmark,
   type Folder,
+  type CuratorRequest,
   type Highlight,
   type PrepareUploadResponse,
   type SyncResponse,
@@ -101,6 +102,14 @@ const send: { [T in OutboxOp['type']]: Sender<T> } = {
     await db.highlights.put(await api<Highlight>('PATCH', `/api/highlights/${op.id}`, { note: op.note }));
   },
   'highlight.delete': async (op) => api('DELETE', `/api/highlights/${op.id}`),
+  'request.create': async (op) => {
+    const { type: _, ...body } = op;
+    await db.requests.put(await api<CuratorRequest>('POST', '/api/requests', body));
+  },
+  'request.update': async (op) => {
+    await db.requests.put(await api<CuratorRequest>('PATCH', `/api/requests/${op.id}`, op.change));
+  },
+  'request.delete': async (op) => api('DELETE', `/api/requests/${op.id}`),
 };
 
 /** Refused for good: a client error, or a feature the server doesn't have (501). Anything else is retried. */
@@ -153,14 +162,14 @@ async function pull() {
 async function pullPage(): Promise<{ more: boolean; removedItems: boolean }> {
   const cursor = (await db.meta.get('syncCursor'))?.value ?? 0;
   const res = await api<SyncResponse>('GET', `/api/sync?since=${cursor}`);
-  await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.tags, db.meta, db.outbox], async () => {
+  await db.transaction('rw', [db.bookmarks, db.folders, db.highlights, db.tags, db.requests, db.meta, db.outbox], async () => {
     // Don't overwrite optimistic local edits made while this pull was in flight; their ops are still queued.
     const dirty = new Set((await db.outbox.toArray()).map((e) => e.op.id));
     const clean = <T extends { id: string }>(rows: T[]) => rows.filter((r) => !dirty.has(r.id));
 
     if (res.reset) {
       // Away too long to replay deletions: the response is the whole library, so replace ours with it.
-      for (const table of [db.bookmarks, db.folders, db.highlights, db.tags]) {
+      for (const table of [db.bookmarks, db.folders, db.highlights, db.tags, db.requests]) {
         await table.where('id').noneOf([...dirty]).delete();
       }
     }
@@ -168,7 +177,8 @@ async function pullPage(): Promise<{ more: boolean; removedItems: boolean }> {
     await db.folders.bulkPut(clean(res.folders));
     await db.highlights.bulkPut(clean(res.highlights));
     await db.tags.bulkPut(clean(res.tags));
-    const tables = { bookmark: db.bookmarks, folder: db.folders, highlight: db.highlights, tag: db.tags };
+    await db.requests.bulkPut(clean(res.requests ?? [])); // absent from servers older than requests
+    const tables = { bookmark: db.bookmarks, folder: db.folders, highlight: db.highlights, tag: db.tags, request: db.requests };
     for (const d of res.deletions) {
       // A newer server can delete kinds of things this version doesn't know about; they aren't stored here anyway.
       await (tables as Partial<typeof tables>)[d.entity]?.delete(d.id);

@@ -1,4 +1,4 @@
-import { filterByTag, isInList, sortComparators, type Bookmark, type ListKey, type SortKey } from '@margin/shared';
+import { filterByTag, isInList, sortComparators, type Bookmark, type CuratorRequest, type ListKey, type SortKey } from '@margin/shared';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db.ts';
 
@@ -26,6 +26,36 @@ export const useHighlights = (bookmarkId: string | undefined) =>
     async () => (bookmarkId ? await db.highlights.where('bookmarkId').equals(bookmarkId).sortBy('createdAt') : []),
     [bookmarkId],
   ) ?? [];
+
+/** Open requests first, then completed ones; newest first within each. */
+const byStatusThenNewest = (a: CuratorRequest, b: CuratorRequest) =>
+  Number(a.status === 'completed') - Number(b.status === 'completed') || b.createdAt - a.createdAt;
+
+export const useRequests = () => useLiveQuery(async () => (await db.requests.toArray()).sort(byStatusThenNewest), []);
+
+export const useRequest = (id: string | undefined) =>
+  useLiveQuery(async () => (id ? ((await db.requests.get(id)) ?? null) : null), [id]);
+
+/** The requests asked from an article (anchored or not). */
+export const useRequestsFor = (bookmarkId: string | undefined) =>
+  useLiveQuery(
+    async () => (bookmarkId ? await db.requests.where('bookmarkId').equals(bookmarkId).sortBy('createdAt') : []),
+    [bookmarkId],
+  ) ?? [];
+
+/** Articles with an open request, for marking list rows (one query per list, not per row). */
+export const openRequestBookmarkIds = async () =>
+  new Set((await db.requests.where('status').equals('open').toArray()).flatMap((r) => (r.bookmarkId ? [r.bookmarkId] : [])));
+
+export const useOpenRequestBookmarkIds = () => useLiveQuery(openRequestBookmarkIds, []) ?? new Set<string>();
+
+export const useOpenRequestCount = () => useLiveQuery(() => db.requests.where('status').equals('open').count(), []);
+
+/** The start of a request, to name it in a chip: its first few words. */
+export function requestPreview(text: string, words = 8) {
+  const all = text.trim().split(/\s+/);
+  return all.length > words ? `${all.slice(0, words).join(' ')}…` : all.join(' ');
+}
 
 export const useHomeCount = () =>
   useLiveQuery(async () => (await db.bookmarks.toArray()).filter((b) => isInList(b, { kind: 'home' })).length, []);

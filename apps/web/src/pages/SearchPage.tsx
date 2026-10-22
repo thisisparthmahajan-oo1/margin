@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Fragment, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BookmarkRow } from '../components/BookmarkRow.tsx';
+import { useOpenRequestBookmarkIds } from '../data/queries.ts';
 import { api } from '../data/api.ts';
 import { db } from '../data/db.ts';
 
@@ -12,6 +13,7 @@ export function SearchPage() {
   const q = params.get('q')?.trim() ?? '';
   const [remote, setRemote] = useState<{ q: string; hits: SearchResponse['hits'] } | null>(null);
   const [offline, setOffline] = useState(false);
+  const asked = useOpenRequestBookmarkIds();
 
   useEffect(() => {
     if (!q) return;
@@ -49,8 +51,8 @@ export function SearchPage() {
       {q && offline && <p className="notice">You’re offline, so only titles and summaries are searched.</p>}
       <div className="rows">
         {remoteRows && !offline
-          ? remoteRows.map(({ hit, bookmark }) => <BookmarkRow key={bookmark.id} bookmark={bookmark} snippet={<Snippet text={hit.snippet} />} />)
-          : local?.map((b) => <BookmarkRow key={b.id} bookmark={b} />)}
+          ? remoteRows.map(({ hit, bookmark }) => <BookmarkRow key={bookmark.id} bookmark={bookmark} snippet={<Snippet text={hit.snippet} />} hasOpenRequest={asked.has(bookmark.id)} />)
+          : local?.map((b) => <BookmarkRow key={b.id} bookmark={b} hasOpenRequest={asked.has(b.id)} />)}
       </div>
       {q && (remoteRows && !offline ? remoteRows.length === 0 : local?.length === 0) && (
         <p className="empty">No articles match “{q}”.</p>

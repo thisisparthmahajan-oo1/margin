@@ -3,7 +3,7 @@ import { Archive, ArchiveRestore, Folder, FolderInput, Heart, RotateCw, Tag, Tra
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteBookmark, retryBookmark, toggleArchive, toggleLike, updateBookmark } from '../data/actions.ts';
-import { canOpen, domainOf, useFolders, useTags } from '../data/queries.ts';
+import { canOpen, domainOf, requestPreview, useFolders, useRequest, useTags } from '../data/queries.ts';
 import { toast } from '../data/toast.ts';
 import { MediaImg } from './MediaImg.tsx';
 import { MoveMenu } from './MoveMenu.tsx';
@@ -40,13 +40,17 @@ export function BookmarkRow({
   selected,
   snippet,
   showFolder = true,
+  hasOpenRequest = false,
 }: {
   bookmark: Bookmark;
   selected?: boolean;
   snippet?: ReactNode;
   /** Off on the folder's own page, where it would only repeat the title. */
   showFolder?: boolean;
+  /** You asked the curator something about this article and haven't completed it. */
+  hasOpenRequest?: boolean;
 }) {
+  const answered = useRequest(b.suggestion?.requestId);
   const [moving, setMoving] = useState(false);
   const [tagging, setTagging] = useState(false);
   const tags = useTags().filter((t) => b.tagIds.includes(t.id));
@@ -67,10 +71,20 @@ export function BookmarkRow({
     b.status === 'ready' ? (
       <>
         <span>{originOf(b)}</span>
-        {b.suggestion && (
-          <span className="tag" title={b.suggestion.reason}>
-            Suggested
-          </span>
+        {b.suggestion &&
+          (answered ? (
+            <Link className="tag" to={`/requests#${answered.id}`} title={b.suggestion.reason}>
+              Answers your request: “{requestPreview(answered.text, 5)}”
+            </Link>
+          ) : (
+            <span className="tag" title={b.suggestion.reason}>
+              Suggested
+            </span>
+          ))}
+        {hasOpenRequest && (
+          <Link className="tag" to="/requests" title="You asked the curator about this article">
+            Asked
+          </Link>
         )}
         {lengthLabel(b) && <span>{lengthLabel(b)}</span>}
         {b.hasVideo && b.kind !== 'video' && <span className="tag">Video</span>}

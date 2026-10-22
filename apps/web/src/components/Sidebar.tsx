@@ -1,8 +1,22 @@
-import { Archive, FileText, FolderClosed, Headphones, Heart, Inbox, MonitorPlay, Plus, Search, Settings, StickyNote, Tag } from 'lucide-react';
+import {
+  Archive,
+  FileText,
+  FolderClosed,
+  Headphones,
+  Heart,
+  Inbox,
+  MessageCircleQuestion,
+  MonitorPlay,
+  Plus,
+  Search,
+  Settings,
+  StickyNote,
+  Tag,
+} from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { createFolder } from '../data/actions.ts';
-import { useFolders, useHomeCount, useTags } from '../data/queries.ts';
+import { useFolders, useHomeCount, useOpenRequestCount, useTags } from '../data/queries.ts';
 import { useSyncStatus } from '../data/sync.ts';
 
 const SYNC_LABELS = {
@@ -17,6 +31,7 @@ export function Sidebar() {
   const folders = useFolders();
   const tags = useTags();
   const homeCount = useHomeCount();
+  const openRequests = useOpenRequestCount();
   const sync = useSyncStatus();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -80,6 +95,11 @@ export function Sidebar() {
         <li>
           <NavLink to="/notes">
             <StickyNote size={17} /> Notes
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/requests">
+            <MessageCircleQuestion size={17} /> Requests {openRequests ? <span className="count">{openRequests}</span> : null}
           </NavLink>
         </li>
       </ul>

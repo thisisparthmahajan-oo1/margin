@@ -14,6 +14,8 @@
   --margin: #1f4bd8;
   --liked: #d0342c;
   --hl: #ffe58f;
+  /* Passages you asked the curator about: blue, to read apart from highlights. */
+  --req: #cfe0ff;
 
   --ui: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   --serif: 'Literata', Georgia, serif;
@@ -533,6 +535,131 @@ a.row-link:hover .row-title {
   margin-top: 4px;
 }
 
+/* ---------- requests ---------- */
+
+.list-header .button {
+  margin-left: auto;
+  align-self: center;
+}
+.requests-group {
+  padding-top: 8px;
+}
+.requests-group > ul {
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+.requests-group > ul > li {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.request-text {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.request.completed .request-text {
+  color: var(--ink-2);
+}
+.request-source {
+  margin-top: 10px;
+  font-size: 14px;
+}
+.request-source blockquote {
+  margin: 0 0 6px;
+  padding-left: 12px;
+  border-left: 3px solid var(--req);
+  font-family: var(--serif);
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.request-source a,
+.request-answers a {
+  color: var(--margin);
+  text-decoration: none;
+}
+.request-source a:hover,
+.request-answers a:hover {
+  text-decoration: underline;
+}
+.request .removed {
+  color: var(--ink-3);
+  font-style: italic;
+}
+.request-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.request-status .waiting {
+  color: var(--ink-3);
+}
+.request-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.request-chip.open {
+  border-color: var(--margin);
+  color: var(--margin);
+}
+.request-answers {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.request-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+.request-actions span {
+  display: flex;
+  gap: 6px;
+}
+.request-compose,
+.request-edit {
+  margin-bottom: 8px;
+}
+.request-compose {
+  margin-bottom: 24px;
+}
+.request-compose textarea,
+.request-edit textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+.request-compose textarea:focus,
+.request-edit textarea:focus {
+  outline: none;
+  border-color: var(--margin);
+}
+.request-popover {
+  width: min(380px, calc(100vw - 24px));
+}
+.request-popover .request-text {
+  font-size: 16px;
+}
+.article-suggestion .answers-request {
+  color: inherit;
+}
+
 /* ---------- notes ---------- */
 
 .notes-group {
@@ -638,6 +765,7 @@ a.row-link:hover .row-title {
 .reader.theme-black {
   color-scheme: dark;
   --hl: rgb(255 214 102 / 0.32);
+  --req: rgb(120 160 255 / 0.34);
 }
 .reader .icon-button {
   color: var(--r-muted);
@@ -981,6 +1109,16 @@ a.row-link:hover .row-title {
   color: inherit;
   cursor: pointer;
   border-radius: 2px;
+}
+.article-body mark.req {
+  background: var(--req);
+  color: inherit;
+  cursor: pointer;
+  border-radius: 2px;
+}
+/* Completed: still findable, but quieter. */
+.article-body mark.req.done {
+  background: color-mix(in srgb, var(--req) 40%, transparent);
 }
 .article-body mark.has-note {
   text-decoration: underline;

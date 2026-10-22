@@ -7,7 +7,7 @@ import { BookmarkRow } from '../components/BookmarkRow.tsx';
 import { useListKeys } from '../components/useListKeys.ts';
 import { deleteFolder, deleteTag, renameFolder, renameTag } from '../data/actions.ts';
 import { addFiles, fromFileList } from '../data/addFiles.ts';
-import { useBookmarks, useFolders, useTags } from '../data/queries.ts';
+import { useBookmarks, useFolders, useOpenRequestBookmarkIds, useTags } from '../data/queries.ts';
 import { appSettings, useAppSettings } from '../data/settings.ts';
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -63,6 +63,7 @@ export function ListPage({ list: fixedList }: { list?: ListKey }) {
   const [params, setParams] = useSearchParams();
   const filterTagId = params.get('tag');
   const data = useBookmarks(list, sort, filterTagId);
+  const asked = useOpenRequestBookmarkIds();
   const items = data?.items;
   // Tags used in this list (on a tag's own page, the other tags), plus the active one.
   const filterTags = tags.filter(
@@ -159,7 +160,7 @@ export function ListPage({ list: fixedList }: { list?: ListKey }) {
       )}
       <div className="rows">
         {items?.map((b, i) => (
-          <BookmarkRow key={b.id} bookmark={b} selected={i === selected} showFolder={list.kind !== 'folder'} />
+          <BookmarkRow key={b.id} bookmark={b} selected={i === selected} showFolder={list.kind !== 'folder'} hasOpenRequest={asked.has(b.id)} />
         ))}
       </div>
     </section>
