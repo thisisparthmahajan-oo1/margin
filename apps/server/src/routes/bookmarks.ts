@@ -1,4 +1,5 @@
 import {
+  CLIP_HTML_MAX,
   RELEVANCE_VALUES,
   SUGGESTION_REASON_MAX,
   type AlreadySavedResponse,
@@ -10,6 +11,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../deps.ts';
 import type { Store } from '../store.ts';
 import { extractorFor } from '../extractors/index.ts';
+import { readabilityExtractor } from '../extractors/readability.ts';
 import { answerDenied } from './requests.ts';
 import { canonicalize, parseUserUrl } from '../url.ts';
 
@@ -21,6 +23,13 @@ export const bookmarkRoutes = new Hono<AppEnv>()
     if (!url) return c.json({ error: 'That doesn’t look like a web address' }, 400);
     const invalid = await invalidPlacement(store, body.folderId, body.addTagIds);
     if (invalid) return c.json({ error: invalid }, 400);
+    if (body.html !== undefined && typeof body.html !== 'string') return c.json({ error: 'html must be a string' }, 400);
+    if (body.html && body.html.length > CLIP_HTML_MAX) {
+      return c.json({ error: `This page is too large to save (over ${CLIP_HTML_MAX / 1_000_000} million characters)` }, 413);
+    }
+    // A clipped page stands in for fetching; links with their own extractor (YouTube, X…) don't need it.
+    const extractor = extractorFor(url);
+    const clipped = body.html && extractor === readabilityExtractor ? { html: body.html } : undefined;
     let suggestion: Suggestion | null = null;
     if (body.suggestion) {
       const reason = body.suggestion.reason?.trim() ?? '';
@@ -40,7 +49,7 @@ export const bookmarkRoutes = new Hono<AppEnv>()
       id: body.id,
       url: url.href,
       canonicalUrl: canonicalize(url),
-      source: extractorFor(url).source,
+      source: extractor.source,
       folderId: body.folderId ?? null,
       tagIds: [...new Set(body.addTagIds ?? [])],
       suggestion,
@@ -49,9 +58,10 @@ export const bookmarkRoutes = new Hono<AppEnv>()
     if (!created && body.ifNew) return c.json<AlreadySavedResponse>({ error: 'Already saved', bookmark }, 409);
     // Checked above, so this links it; the request can only have been completed in the moments between.
     if (suggestion?.requestId) await store.addAnswer(suggestion.requestId, bookmark.id);
-    if (created || bookmark.status === 'failed') {
+    // A re-save fetches again only after a failure; a clipped copy always replaces what was read before.
+    if (created || bookmark.status === 'failed' || clipped) {
       if (!created) await store.markPending(bookmark.id);
-      ingestor.enqueue(bookmark.id);
+      ingestor.enqueue(bookmark.id, clipped);
     }
     return c.json(await store.getBookmark(bookmark.id), created ? 201 : 200);
   })

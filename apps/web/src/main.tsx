@@ -30,6 +30,7 @@ import { toast } from './data/toast.ts';
 import { initBackButton, initShareTarget, isNative } from './platform/native.ts';
 import { Shell } from './components/Shell.tsx';
 import { AddPage } from './pages/AddPage.tsx';
+import { ClipPage } from './pages/ClipPage.tsx';
 import { ListPage } from './pages/ListPage.tsx';
 import { NotesPage } from './pages/NotesPage.tsx';
 import { RequestsPage } from './pages/RequestsPage.tsx';
@@ -57,6 +58,7 @@ const router = createBrowserRouter([
   },
   { path: '/read/:id', element: <ReaderPage /> },
   { path: '/add', element: <AddPage /> },
+  { path: '/clip', element: <ClipPage /> },
 ]);
 
 // The native app ships its files inside the APK; only the PWA needs a service worker.

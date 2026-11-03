@@ -278,7 +278,16 @@ export interface CreateBookmarkRequest {
   };
   /** Never re-save: when the address is already saved, answer 409 (`AlreadySavedResponse`) and leave that item alone. */
   ifNew?: boolean;
+  /**
+   * The page as the browser that saved it saw it (the "Save to Margin" bookmarklet), used instead of
+   * fetching `url`, for sites that block Margin. Ignored for links with their own extractor (YouTube, X…).
+   * An address that's already saved is re-read from this copy.
+   */
+  html?: string;
 }
+
+/** Longest `html` a save takes; keeps the request under the host's body limit (4.5 MB on Vercel). */
+export const CLIP_HTML_MAX = 3_000_000;
 
 /** The 409 answer to a create with `ifNew` when the address is already saved. */
 export interface AlreadySavedResponse extends ApiError {

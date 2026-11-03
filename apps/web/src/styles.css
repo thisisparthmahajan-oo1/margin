@@ -1615,3 +1615,12 @@ a.row-link:hover .row-title {
   gap: 4px;
   border-style: dashed;
 }
+
+.clip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.reader-missing .clip-actions {
+  justify-content: center;
+}

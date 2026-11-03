@@ -1,8 +1,10 @@
 import { formatBytes, type StorageResponse } from '@margin/shared';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiRequestError } from '../data/api.ts';
 import { signOut } from '../data/auth.ts';
+import { bookmarkletFor } from '../data/clip.ts';
+import { API_BASE } from '../data/config.ts';
 import { db } from '../data/db.ts';
 import { deviceFileBytes } from '../data/files.ts';
 import { appSettings, useAppSettings } from '../data/settings.ts';
@@ -88,7 +90,46 @@ export function SettingsPage() {
         )}
         <p className="muted">Signing out keeps your saved articles on this device.</p>
       </div>
+
+      <div className="setting">
+        <h2>Experimental</h2>
+        <SaveToMargin />
+      </div>
     </section>
+  );
+}
+
+/** The Save to Margin bookmarklet (data/clip.ts), for sites that block Margin from fetching them. */
+function SaveToMargin() {
+  // In the apps this page runs at capacitor://localhost; the bookmarklet must open the hosted Margin.
+  const code = bookmarkletFor(API_BASE || location.origin);
+  const link = useRef<HTMLAnchorElement>(null);
+  const [copied, setCopied] = useState(false);
+  // React refuses javascript: hrefs, so the bookmarklet's address is set directly.
+  useEffect(() => link.current?.setAttribute('href', code), [code]);
+
+  return (
+    <>
+      <p>
+        <strong>Save to Margin</strong> saves the page you’re on as your browser shows it. Use it for sites that won’t let Margin
+        download them (“Could not fetch this page … HTTP 403”).
+      </p>
+      <p className="clip-actions">
+        <a ref={link} className="button" onClick={(e) => e.preventDefault()} draggable>
+          Save to Margin
+        </a>
+        <button
+          className="button subtle"
+          onClick={() => void navigator.clipboard.writeText(code).then(() => setCopied(true))}
+        >
+          {copied ? 'Copied' : 'Copy bookmarklet'}
+        </button>
+      </p>
+      <p className="muted">
+        On a computer, drag the button to your bookmarks bar. On a phone, bookmark any page, edit the bookmark and paste the
+        copied text as its address. Then open the bookmark while you’re on the page.
+      </p>
+    </>
   );
 }
 

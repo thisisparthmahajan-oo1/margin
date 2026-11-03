@@ -46,7 +46,7 @@ const adoptTag = (localId: string, saved: Tag) =>
 
 const send: { [T in OutboxOp['type']]: Sender<T> } = {
   'bookmark.create': async (op) => {
-    await replaceLocal(op.id, await api<Bookmark>('POST', '/api/bookmarks', { id: op.id, url: op.url }));
+    await replaceLocal(op.id, await api<Bookmark>('POST', '/api/bookmarks', { id: op.id, url: op.url, html: op.html }));
   },
   // prepare (size + storage limit) -> PUT the bytes straight to file storage -> finish.
   'bookmark.upload': async (op) => {

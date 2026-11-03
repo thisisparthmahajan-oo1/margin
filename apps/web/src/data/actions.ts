@@ -67,6 +67,18 @@ export async function saveUrl(input: string): Promise<string | null> {
 }
 
 /**
+ * Saves a page as your browser had it (the Save to Margin bookmarklet), for sites that block Margin's
+ * server. An address that's already saved is updated in place: the server re-reads it from this copy.
+ */
+export async function saveClip(url: string, html: string): Promise<string> {
+  const existing = await db.bookmarks.where('canonicalUrl').equals(url).first();
+  const id = existing?.id ?? crypto.randomUUID();
+  const item = existing ? { ...existing, status: 'pending' as const, error: null } : placeholder({ id, url, source: sourceOf(url) });
+  await commit(() => db.bookmarks.put(item), { type: 'bookmark.create', id, url, html });
+  return id;
+}
+
+/**
  * Adds a PDF from this device. It's readable here at once (the original is kept on the device);
  * the upload, and text extraction on the server, follow through the outbox like any other change.
  * Returns null if the file isn't a PDF.

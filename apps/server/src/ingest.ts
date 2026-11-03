@@ -1,5 +1,6 @@
 import type { Bookmark } from '@margin/shared';
 import { extractorFor, ExtractionError } from './extractors/index.ts';
+import { extractFromHtml } from './extractors/readability.ts';
 import type { MediaStore } from './media.ts';
 import { processPdf } from './pdf.ts';
 import { processPage } from './pipeline.ts';
@@ -17,16 +18,25 @@ export const runInBackground: Defer = (work) => void work;
 
 const NO_FILE_STORAGE = 'File storage isn’t set up on the server, so PDFs can’t be saved.';
 
+/** A page handed over by the browser that saved it (the bookmarklet), read instead of fetching the link. */
+export interface ClippedPage {
+  html: string;
+}
+
 /** Processes a saved item in the background. Status moves pending -> ready | failed. */
 export function createIngestor(store: Store, media: MediaStore, files: FileLibrary | null, defer: Defer) {
   const inFlight = new Set<string>();
 
-  /** An uploaded file is already in storage; a link is fetched and handled by whichever extractor matches it. */
-  async function process(bookmark: Bookmark): Promise<{ content: ExtractedContent; reservedKey?: string }> {
+  /**
+   * An uploaded file is already in storage; a clipped page is read as given; any other link is fetched
+   * and handled by whichever extractor matches it.
+   */
+  async function process(bookmark: Bookmark, clipped?: ClippedPage): Promise<{ content: ExtractedContent; reservedKey?: string }> {
     if (bookmark.source === 'upload') {
       if (!files || !bookmark.file) throw new ExtractionError(NO_FILE_STORAGE);
       return { content: await processPdf(await files.read(bookmark.file.key), bookmark.file) };
     }
+    if (clipped) return { content: await processPage(extractFromHtml(clipped.html, bookmark.url), media) };
     const url = new URL(bookmark.url);
     const raw = await extractorFor(url).extract(url);
     if (raw.kind !== 'pdf') return { content: await processPage(raw, media) };
@@ -35,12 +45,12 @@ export function createIngestor(store: Store, media: MediaStore, files: FileLibra
     return { content: await processPdf(raw.bytes, file), reservedKey: file.key };
   }
 
-  async function run(id: string) {
+  async function run(id: string, clipped?: ClippedPage) {
     const bookmark = await store.getBookmark(id);
     if (!bookmark || inFlight.has(id)) return;
     inFlight.add(id);
     try {
-      const { content, reservedKey } = await process(bookmark);
+      const { content, reservedKey } = await process(bookmark, clipped);
       await store.markReady(id, content);
       if (reservedKey) await files!.endUpload(reservedKey);
     } catch (e) {
@@ -54,8 +64,8 @@ export function createIngestor(store: Store, media: MediaStore, files: FileLibra
   }
 
   return {
-    enqueue(id: string) {
-      defer(run(id));
+    enqueue(id: string, clipped?: ClippedPage) {
+      defer(run(id, clipped));
     },
   };
 }

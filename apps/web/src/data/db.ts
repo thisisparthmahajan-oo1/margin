@@ -3,7 +3,8 @@ import Dexie, { type EntityTable } from 'dexie';
 
 /** A change made on this device that the server hasn't acknowledged yet. Flushed in `seq` order. */
 export type OutboxOp =
-  | { type: 'bookmark.create'; id: string; url: string }
+  /** `html`: the page as the browser saw it (the Save to Margin bookmarklet), read instead of fetching `url`. */
+  | { type: 'bookmark.create'; id: string; url: string; html?: string }
   | { type: 'bookmark.update'; id: string; patch: UpdateBookmarkRequest }
   | { type: 'bookmark.delete'; id: string }
   | { type: 'bookmark.retry'; id: string }
