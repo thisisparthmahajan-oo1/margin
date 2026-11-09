@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Margin pen test</title>
+<style>
+  body { font: 20px/1.6 Georgia, serif; margin: 0; padding: 150px 24px 60vh; max-width: 40em; }
+  #log { position: fixed; top: 0; left: 0; right: 0; background: #222; color: #9f9; font: 13px/1.4 monospace; padding: 8px; z-index: 9; height: 120px; overflow: auto; white-space: pre-wrap; }
+  #log b { color: #fff; }
+  ::highlight(pen) { background: #ffe066; }
+  mark { background: #ffe066; }
+  h2 { font-size: 22px; }
+</style>
+</head>
+<body>
+<div id="log"></div>
+<h2>Margin pen test</h2>
+<p><b>1.</b> Scroll this page with your <b>finger</b>. It should scroll as normal.</p>
+<p><b>2.</b> With the <b>pen</b>, drag across a sentence below. It should turn yellow as you drag, and the page should <b>not</b> scroll or show the phone's own selection handles.</p>
+<p><b>3.</b> <b>Tap</b> a yellow passage with the pen. The black panel should say "pen tap on highlight".</p>
+<p><b>4.</b> Hold the pen just above the screen without touching it. If the panel says "pen hover", the Stylo supports hover.</p>
+<p>Then send me a screenshot of the black panel.</p>
+<hr>
+<div id="article">
+<p>Every production voice agent platform needs a rule for deciding when a caller has finished speaking, a job known as end of turn detection. Three mechanisms do that job. A fixed silence timer and a voice activity detector both infer turn ends from quiet, while a fused model reads acoustic and semantic signals together.</p>
+<p>Your choice sets two production numbers at once, how often your agent cuts callers off and how long it waits before every response. In this guide, you'll walk through the failure mode of each mechanism and how to measure your own false interruption rate against your current baseline.</p>
+<p>Fixed silence timers fire on mid-turn pauses because pause and gap durations overlap heavily. A VAD detects when sound stops but can't determine whether the thought is complete; noise and hesitation both trigger it. Models fusing acoustic and semantic signals predict completion instead of waiting for silence.</p>
+<p>No industry standard defines a bad false interruption rate; build a baseline and compare against it. Every time your agent's speech starts before the caller's turn ended, log one false interruption. Exclude backchannels and background noise.</p>
+<p>After any threshold change for a customer, run the false interruption measurement again on the same sample and watch response times. The method matters more than the number you land on.</p>
+<p>Every production voice agent platform needs a rule for deciding when a caller has finished speaking, a job known as end of turn detection. Three mechanisms do that job. A fixed silence timer and a voice activity detector both infer turn ends from quiet, while a fused model reads acoustic and semantic signals together.</p>
+<p>Your choice sets two production numbers at once, how often your agent cuts callers off and how long it waits before every response. In this guide, you'll walk through the failure mode of each mechanism and how to measure your own false interruption rate against your current baseline.</p>
+</div>
+<script>
+const logEl = document.getElementById('log');
+const lines = [];
+const counts = { penDown: 0, penCancel: 0, penScrolled: 0, nativeSelection: 0, highlights: 0, taps: 0, hover: 0 };
+function log(msg) {
+  lines.unshift(new Date().toLocaleTimeString() + '  ' + msg);
+  lines.length = Math.min(lines.length, 30);
+  render();
+}
+function render() {
+  logEl.innerHTML = '<b>' + navigator.userAgent.replace(/.*(Android [\d.]+).*?(Chrome\/[\d.]+).*/, '$1 · $2') +
+    ' · highlight API: ' + ('highlights' in CSS) + '</b>\n<b>' + JSON.stringify(counts) + '</b>\n' + lines.join('\n');
+}
+render();
+
+const article = document.getElementById('article');
+const caretAt = (x, y) => {
+  if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); return p && { node: p.offsetNode, offset: p.offset }; }
+  const r = document.caretRangeFromPoint(x, y); return r && { node: r.startContainer, offset: r.startOffset };
+};
+const done = [];           // finished highlights (Ranges)
+let lastPointer = '';      // pointerType of the latest pointerdown
+let drag = null;           // { start, range, moved, scrollY }
+
+const paint = () => {
+  if (!('highlights' in CSS)) return;
+  CSS.highlights.set('pen', new Highlight(...done, ...(drag && drag.range ? [drag.range] : [])));
+};
+
+// The trick under test: pointerdown fires before touchstart; cancelling touchstart for a pen stops the scroll.
+article.addEventListener('pointerdown', (e) => {
+  lastPointer = e.pointerType;
+  if (e.pointerType !== 'pen') return;
+  counts.penDown++;
+  drag = { start: caretAt(e.clientX, e.clientY), range: null, moved: false, scrollY: window.scrollY, x: e.clientX, y: e.clientY };
+  log(`pen down (pressure ${e.pressure.toFixed(2)}, buttons ${e.buttons})`);
+});
+article.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  if (lastPointer === 'pen') e.preventDefault();
+  if (t && t.touchType) log(`touchstart touchType=${t.touchType}`);
+}, { passive: false });
+
+article.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'pen') return;
+  if (e.buttons === 0) { counts.hover++; if (counts.hover % 20 === 1) log('pen hover'); render(); return; }
+  if (!drag || !drag.start) return;
+  if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+  drag.moved = true;
+  const end = caretAt(e.clientX, e.clientY);
+  if (!end) return;
+  const r = document.createRange();
+  r.setStart(drag.start.node, drag.start.offset);
+  r.setEnd(end.node, end.offset);
+  if (r.collapsed) { r.setStart(end.node, end.offset); r.setEnd(drag.start.node, drag.start.offset); }
+  drag.range = r;
+  paint();
+});
+
+article.addEventListener('pointerup', (e) => {
+  if (e.pointerType !== 'pen' || !drag) return;
+  if (window.scrollY !== drag.scrollY) { counts.penScrolled++; log('PAGE SCROLLED during pen drag'); }
+  if (drag.moved && drag.range && !drag.range.collapsed) {
+    done.push(drag.range); counts.highlights++;
+    log(`highlighted: "${drag.range.toString().slice(0, 50)}…"`);
+  } else {
+    counts.taps++;
+    const p = caretAt(e.clientX, e.clientY);
+    const hit = p && done.some((r) => r.isPointInRange(p.node, p.offset));
+    log(hit ? 'pen tap on highlight' : 'pen tap (not on a highlight)');
+  }
+  drag = null; paint(); render();
+});
+article.addEventListener('pointercancel', (e) => {
+  if (e.pointerType !== 'pen') return;
+  counts.penCancel++; log('POINTERCANCEL: browser took the pen gesture (scroll/selection)');
+  drag = null; paint();
+});
+document.addEventListener('selectionchange', () => {
+  const s = document.getSelection();
+  if (s && !s.isCollapsed && lastPointer === 'pen') { counts.nativeSelection++; log('native selection appeared: "' + s.toString().slice(0, 30) + '"'); }
+});
+</script>
+</body>
+</html>
