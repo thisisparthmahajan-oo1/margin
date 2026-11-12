@@ -1,0 +1,30 @@
+{
+  "shortcode": "123243A7E7",
+  "title": "Staff Software Engineer",
+  "remote": false,
+  "location": {
+    "city": "London",
+    "country": "United Kingdom",
+    "countryCode": "GB",
+    "region": "England"
+  },
+  "locations": [
+    {
+      "city": "London",
+      "country": "United Kingdom",
+      "countryCode": "GB",
+      "hidden": false,
+      "region": "England"
+    }
+  ],
+  "published": "2026-08-07T00:00:00.000Z",
+  "type": "full",
+  "workplace": "on_site",
+  "salary_from": 150000,
+  "salary_to": 250000,
+  "salary_currency_iso_code": "GBP",
+  "salary_frequency": "year",
+  "description": "<p>About the company</p><p></p><p>Our client is a YC-backed, Series A AI company building autonomous voice agents for trades and field-services businesses. Its product integrates with industry CRMs to automate customer calls, booking, scheduling, invoicing, and urgent service workflows. The company recently raised a $13M Series A led by a leading venture firm and is growing from a focused 14-person team in London's Old Street technology hub.</p><p></p><p>The role and why it matters</p><p></p><p>This is a staff-level product engineering role and one of the final founding engineering hires. You will shape both the technical foundations and the way the company works directly with customers. The role combines hands-on full-stack development, applied AI, infrastructure, integrations, and technical leadership in a fast-moving early-stage environment.</p><p></p><p>What you'll do</p><p></p><p>• Build and ship core product features across Python, TypeScript, cloud infrastructure, event-driven systems, and third-party integrations.</p><p>• Own customer problems from discovery and scoping through implementation and measurable outcomes.</p><p>• Build and improve AI voice-agent workflows that interact reliably with real-world service operations.</p><p>• Decide when a fast MVP is appropriate and when the product needs scalable, reliable foundations.</p><p>• Raise engineering standards for testing, documentation, reliability, security, and operational quality.</p><p>• Help a small engineering team make sound architecture decisions while continuing to write production code.</p>",
+  "requirements": "<p>What we're looking for</p><p></p><p>• 5 to 10 years of full-stack software engineering experience with a backend emphasis.</p><p>• Meaningful experience building and shipping AI products end to end, especially agentic systems.</p><p>• Strong production experience with Python or TypeScript.</p><p>• Deep experience with asynchronous Python, including coroutines, HTTP clients, asynchronous model APIs, and robust error handling.</p><p>• Early-stage startup experience, ideally at Series A or earlier.</p><p>• Experience with Kubernetes, serverless systems, distributed infrastructure, or event-driven architecture.</p><p>• Ability to scope and deliver technical solutions directly with customers and non-technical stakeholders.</p><p>• A computer science degree or equivalent technical foundation.</p><p></p><p>Bonus points</p><p></p><p>• Experience with voice AI, speech-to-text, text-to-speech, or telephony platforms.</p><p>• Experience building CRM or other complex third-party integrations.</p><p>• Previous founder experience or a strong customer-facing engineering background.</p><p>• Experience in fintech, trades software, or operationally complex vertical software.</p><p></p><p>Location and work model</p><p></p><p>• Full-time role based in London, United Kingdom.</p><p>• Five days per week in the Old Street office.</p><p>• Visa sponsorship is available.</p><p>• The team operates with a high-intensity, office-centric startup culture.</p>",
+  "benefits": "<p>• £150,000 to £250,000 base salary.</p><p>• Competitive and meaningful equity.</p><p>• Staff-level scope with substantial influence over product and engineering direction.</p><p>• Opportunity to join a well-funded team at a formative stage.</p>"
+}
