@@ -1,12 +1,9 @@
 import {
   Archive,
-  FileText,
   FolderClosed,
-  Headphones,
   Heart,
   Inbox,
   MessageCircleQuestion,
-  MonitorPlay,
   Plus,
   Search,
   Settings,
@@ -70,21 +67,6 @@ export function Sidebar() {
         <li>
           <NavLink to="/liked">
             <Heart size={17} /> Liked
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/pdfs">
-            <FileText size={17} /> PDFs
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/videos">
-            <MonitorPlay size={17} /> Videos
-          </NavLink>
-        </li>
-        <li>
-          <NavLink to="/podcasts">
-            <Headphones size={17} /> Podcasts
           </NavLink>
         </li>
         <li>

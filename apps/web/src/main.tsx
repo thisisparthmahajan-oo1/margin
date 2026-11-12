@@ -19,7 +19,7 @@ import './styles.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import { TokenGate } from './components/TokenGate.tsx';
 import { saveUrl } from './data/actions.ts';
@@ -45,9 +45,8 @@ const router = createBrowserRouter([
       { path: '/', element: <ListPage list={{ kind: 'home' }} /> },
       { path: '/liked', element: <ListPage list={{ kind: 'liked' }} /> },
       { path: '/archive', element: <ListPage list={{ kind: 'archive' }} /> },
-      { path: '/pdfs', element: <ListPage list={{ kind: 'pdfs' }} /> },
-      { path: '/videos', element: <ListPage list={{ kind: 'videos' }} /> },
-      { path: '/podcasts', element: <ListPage list={{ kind: 'podcasts' }} /> },
+      // PDFs, Videos and Podcasts were lists once; old links land on Home.
+      ...['/pdfs', '/videos', '/podcasts'].map((path) => ({ path, element: <Navigate to="/" replace /> })),
       { path: '/folder/:folderId', element: <ListPage /> },
       { path: '/tag/:tagId', element: <ListPage /> },
       { path: '/notes', element: <NotesPage /> },

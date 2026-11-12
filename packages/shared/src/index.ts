@@ -50,7 +50,7 @@ export interface Bookmark {
   contentHtml: string | null;
   wordCount: number;
   publishedAt: number | null;
-  /** Contains playable video (YouTube, or an X post/Article with videos): labelled and listed under Videos. */
+  /** Contains playable video (YouTube, or an X post/Article with videos): labelled Video in lists. */
   hasVideo: boolean;
   /** kind 'pdf': the original file. */
   file: StoredFile | null;
@@ -174,9 +174,6 @@ export type ListKey =
   | { kind: 'home' }
   | { kind: 'liked' }
   | { kind: 'archive' }
-  | { kind: 'pdfs' }
-  | { kind: 'videos' }
-  | { kind: 'podcasts' }
   | { kind: 'folder'; folderId: string }
   | { kind: 'tag'; tagId: string };
 
@@ -184,7 +181,7 @@ export type SortKey = 'newest' | 'oldest' | 'shortest' | 'longest';
 
 /** The single definition of list membership, used by server queries and client filtering alike. */
 export function isInList(
-  b: Pick<Bookmark, 'archivedAt' | 'likedAt' | 'folderId' | 'kind' | 'hasVideo' | 'tagIds'>,
+  b: Pick<Bookmark, 'archivedAt' | 'likedAt' | 'folderId' | 'tagIds'>,
   list: ListKey,
 ): boolean {
   switch (list.kind) {
@@ -194,12 +191,6 @@ export function isInList(
       return b.likedAt !== null;
     case 'archive':
       return b.archivedAt !== null;
-    case 'pdfs':
-      return b.archivedAt === null && b.kind === 'pdf';
-    case 'videos':
-      return b.archivedAt === null && b.hasVideo;
-    case 'podcasts':
-      return b.archivedAt === null && b.kind === 'podcast';
     case 'folder':
       return b.archivedAt === null && b.folderId === list.folderId;
     case 'tag':
