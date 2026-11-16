@@ -36,6 +36,18 @@ describe('readability extraction', () => {
     for (const n of [1, 2, 3]) expect(a.html).toContain(`Caption ${n}.`);
   });
 
+  it('reads content React streamed in after the page (Next.js Suspense)', () => {
+    // The article arrives hidden at the end of the page; a script moves it into its slot in the browser.
+    const html = `<html><head><title>Streamed</title></head><body><nav><p>Compare</p><a href="/compare">Tool comparisons</a></nav>
+      <main><!--$?--><template id="B:0"></template><div aria-busy="true">Loading<!--$--><span>nested</span><!--/$--></div><!--/$--></main>
+      <div hidden id="S:0"><article><h1>Streamed</h1>${paragraphs}</article></div>
+      <script>$RC("B:0","S:0")</script></body></html>`;
+    const a = extractFromHtml(html, 'https://example.com/post');
+    expect(a.html).toContain('Paragraph 7');
+    expect(a.html).not.toContain('Tool comparisons');
+    expect(a.html).not.toContain('Loading');
+  });
+
   it('reads a design-heavy project page (Jeva)', () => {
     const a = extractFromHtml(fixture('jeva.html'), 'https://liqiiiii.github.io/Jeva/');
     expect(a.byline).toBe('Qi Li, Xinchao Wang*'); // not the opening epigraph's "Albert Einstein & Leopold Infeld"

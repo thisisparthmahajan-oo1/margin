@@ -104,6 +104,7 @@ const BYLINE_MARKER = /byline|author|dateline|writtenby|p-author/i;
 
 /** Fixes for page shapes Readability misreads. Mutates `doc`. */
 function prepareForReadability(doc: Document) {
+  revealStreamedContent(doc);
   // A quote's credit ("Albert Einstein & Leopold Infeld" under an epigraph) isn't the article's author.
   // Readability would take it as the byline and cut it, and often the quote, out of the text.
   for (const el of doc.querySelectorAll('blockquote *, figcaption *, figure *, cite')) {
@@ -117,6 +118,38 @@ function prepareForReadability(doc: Document) {
   for (const grid of doc.querySelectorAll('div')) {
     const children = [...grid.children];
     if (children.length > 1 && children.every((c) => c.tagName === 'FIGURE')) grid.replaceWith(...children);
+  }
+}
+
+/**
+ * React streams server-rendered content that wasn't ready in time (a Suspense boundary) at the end
+ * of the page, in a hidden `<div id="S:n">`, with a script `$RC("B:n","S:n")` that moves it into its
+ * slot: a `<template id="B:n">` followed by a loading placeholder up to the boundary's `<!--/$-->`.
+ * We don't run scripts, and Readability skips hidden elements, so a page streamed this way (Next.js
+ * blogs, e.g. developersdigest.tech) would read as just its menus. Make the moves here instead.
+ */
+function revealStreamedContent(doc: Document) {
+  const scripts = [...doc.querySelectorAll('script:not([src])')].map((s) => s.textContent ?? '').join('\n');
+  for (const [, slotId, contentId] of scripts.matchAll(/\$RC\("([^"]+)","([^"]+)"\)/g)) {
+    const slot = doc.getElementById(slotId!);
+    const content = doc.getElementById(contentId!);
+    if (!slot || !content) continue;
+    // Drop the placeholder: everything after the slot up to the comment that closes its boundary.
+    let depth = 0;
+    for (let node = slot.nextSibling; node; ) {
+      const next = node.nextSibling;
+      if (node.nodeType === 8 /* comment */) {
+        const data = (node as Comment).data;
+        if (data === '/$') {
+          if (depth === 0) break;
+          depth--;
+        } else if (data === '$' || data === '$?' || data === '$!') depth++;
+      }
+      node.remove();
+      node = next;
+    }
+    slot.replaceWith(...content.childNodes);
+    content.remove();
   }
 }
 
