@@ -9,7 +9,7 @@ const bookmark = (id: string, images: string[], leadImage: string | null = null)
   hasVideo: false, file: null, video: null, tagIds: [], audio: null, suggestion: null, relevance: null, relevanceAt: null,
   title: id, byline: null, siteName: null, excerpt: null, leadImage, wordCount: 1, publishedAt: null,
   contentHtml: images.map((src) => `<img src="${src}">`).join(''),
-  folderId: null, likedAt: null, archivedAt: null, progress: 0, progressUpdatedAt: null, savedAt: 0, updatedAt: 0,
+  folderId: null, folderPosition: null, likedAt: null, archivedAt: null, progress: 0, progressUpdatedAt: null, savedAt: 0, updatedAt: 0,
 });
 const blob = () => new Blob(['x']);
 

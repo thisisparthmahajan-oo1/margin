@@ -10,6 +10,7 @@ import {
   type RequestStatus,
   type TextQuoteAnchor,
   type UpdateBookmarkRequest,
+  type UpdateFolderRequest,
 } from '@margin/shared';
 import { db, type OutboxOp } from './db.ts';
 import { isPdf, pruneFiles, sha256Hex } from './files.ts';
@@ -34,7 +35,7 @@ const placeholder = (fields: Pick<Bookmark, 'id' | 'url' | 'source'> & Partial<B
   return {
     canonicalUrl: fields.url, kind: 'article', status: 'pending', error: null, title: null, byline: null,
     siteName: null, excerpt: null, leadImage: null, contentHtml: null, wordCount: 0, publishedAt: null,
-    hasVideo: false, file: null, video: null, audio: null, tagIds: [], suggestion: null, relevance: null, relevanceAt: null, folderId: null, likedAt: null, archivedAt: null, progress: 0,
+    hasVideo: false, file: null, video: null, audio: null, tagIds: [], suggestion: null, relevance: null, relevanceAt: null, folderId: null, folderPosition: null, likedAt: null, archivedAt: null, progress: 0,
     progressUpdatedAt: null, savedAt: now, updatedAt: now,
     ...fields,
   };
@@ -104,12 +105,19 @@ export async function savePdf(file: Blob, name: string): Promise<string | null> 
 
 export async function updateBookmark(id: string, patch: UpdateBookmarkRequest) {
   const now = Date.now();
+  // Entering a folder puts an item at the bottom of its own order (the server does the same and has the last word).
+  const current = patch.folderId !== undefined ? await db.bookmarks.get(id) : undefined;
+  const entering = patch.folderId && patch.folderId !== current?.folderId ? await bottomOf(patch.folderId) : null;
   await commit(
     () =>
       db.bookmarks.update(id, (b) => {
         if (patch.liked !== undefined) b.likedAt = patch.liked ? (b.likedAt ?? now) : null;
         if (patch.archived !== undefined) b.archivedAt = patch.archived ? (b.archivedAt ?? now) : null;
-        if (patch.folderId !== undefined) b.folderId = patch.folderId;
+        if (patch.folderId !== undefined && patch.folderId !== b.folderId) {
+          b.folderId = patch.folderId;
+          b.folderPosition = entering;
+        }
+        if (patch.folderPosition !== undefined && b.folderId) b.folderPosition = patch.folderPosition;
         if (patch.relevance !== undefined) {
           b.relevance = patch.relevance;
           b.relevanceAt = now;
@@ -131,6 +139,23 @@ export const setRelevance = (b: Bookmark, relevance: Relevance) =>
 export const toggleArchive = (b: Bookmark) => updateBookmark(b.id, { archived: b.archivedAt === null });
 export const moveToFolder = (b: Bookmark, folderId: string | null) =>
   updateBookmark(b.id, { folderId, archived: false });
+
+const bottomOf = async (folderId: string) => {
+  const inFolder = await db.bookmarks.filter((b) => b.folderId === folderId).toArray();
+  return Math.floor(Math.max(-1, ...inFolder.map((b) => b.folderPosition ?? -1))) + 1;
+};
+
+/** Where an item dropped between `before` and `after` goes in its folder's own order (either may be missing: top or bottom). */
+export function positionBetween(before: number | null, after: number | null): number {
+  if (before === null && after === null) return 0;
+  if (before === null) return after! - 1;
+  if (after === null) return before + 1;
+  return (before + after) / 2;
+}
+
+/** Moves an item within its folder ("My order") to sit between two neighbours. */
+export const reorderInFolder = (b: Bookmark, before: Bookmark | null, after: Bookmark | null) =>
+  updateBookmark(b.id, { folderPosition: positionBetween(before?.folderPosition ?? null, after?.folderPosition ?? null) });
 
 /** Progress changes constantly while scrolling; collapse the queue to the latest value per article. */
 export async function saveProgress(id: string, progress: number) {
@@ -168,7 +193,7 @@ export async function createFolder(name: string) {
   const now = Date.now();
   const id = crypto.randomUUID();
   const position = ((await db.folders.orderBy('position').last())?.position ?? -1) + 1;
-  await commit(() => db.folders.put({ id, name, position, createdAt: now, updatedAt: now }), {
+  await commit(() => db.folders.put({ id, name, position, customOrder: false, createdAt: now, updatedAt: now }), {
     type: 'folder.create',
     id,
     name,
@@ -176,12 +201,16 @@ export async function createFolder(name: string) {
   return id;
 }
 
-export const renameFolder = (id: string, name: string) =>
-  commit(() => db.folders.update(id, { name }), { type: 'folder.update', id, name });
+const updateFolder = (id: string, patch: UpdateFolderRequest) =>
+  commit(() => db.folders.update(id, patch), { type: 'folder.update', id, patch });
+
+export const renameFolder = (id: string, name: string) => updateFolder(id, { name });
+/** "My order" on (the folder lists items in your order) or off (the app-wide sort). */
+export const setFolderCustomOrder = (id: string, on: boolean) => updateFolder(id, { customOrder: on });
 
 export async function deleteFolder(id: string) {
   await commit(async () => {
-    await db.bookmarks.filter((b) => b.folderId === id).modify({ folderId: null });
+    await db.bookmarks.filter((b) => b.folderId === id).modify({ folderId: null, folderPosition: null });
     await db.folders.delete(id);
   }, { type: 'folder.delete', id });
 }

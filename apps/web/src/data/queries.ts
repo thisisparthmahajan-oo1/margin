@@ -1,16 +1,19 @@
-import { filterByTag, isInList, sortComparators, type Bookmark, type CuratorRequest, type ListKey, type SortKey } from '@margin/shared';
+import { filterByTag, folderOrder, isInList, sortComparators, type Bookmark, type CuratorRequest, type ListKey, type SortKey } from '@margin/shared';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db.ts';
 
+/** How a list is ordered: an app-wide sort, or a folder's own order ("My order"). */
+export type ListOrder = SortKey | 'custom';
+
 /** A list's items, optionally narrowed to one tag. Also returns the list's tags (before narrowing), for the filter. */
-export const useBookmarks = (list: ListKey, sort: SortKey, tagId: string | null = null) =>
+export const useBookmarks = (list: ListKey, order: ListOrder, tagId: string | null = null) =>
   useLiveQuery(async () => {
     const inList = (await db.bookmarks.toArray()).filter((b) => isInList(b, list));
     return {
-      items: filterByTag(inList, tagId).sort(sortComparators[sort]),
+      items: filterByTag(inList, tagId).sort(order === 'custom' ? folderOrder : sortComparators[order]),
       tagIds: new Set(inList.flatMap((b) => b.tagIds)),
     };
-  }, [JSON.stringify(list), sort, tagId]);
+  }, [JSON.stringify(list), order, tagId]);
 
 /** All tags, alphabetically. */
 export const useTags = () =>

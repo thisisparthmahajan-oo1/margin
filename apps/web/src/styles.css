@@ -394,6 +394,33 @@ a {
   gap: 20px;
   align-items: flex-start;
 }
+/* "My order": the grip that moves a row. Only it starts a drag, so touching the rest of the row scrolls. */
+.drag-handle {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  margin: 0 -12px 0 -10px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: grab;
+  touch-action: none;
+}
+.drag-handle:hover,
+.drag-handle:focus-visible {
+  color: var(--ink);
+}
+.sortable-row {
+  position: relative;
+  background: var(--paper);
+}
+.sortable-row.dragging {
+  z-index: 2;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+  cursor: grabbing;
+}
 .row-link {
   display: block;
   text-decoration: none;

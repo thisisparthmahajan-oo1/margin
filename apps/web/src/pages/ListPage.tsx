@@ -4,10 +4,11 @@ import { useState, type DragEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AddBar } from '../components/AddBar.tsx';
 import { BookmarkRow } from '../components/BookmarkRow.tsx';
+import { SortableRows } from '../components/SortableRows.tsx';
 import { useListKeys } from '../components/useListKeys.ts';
-import { deleteFolder, deleteTag, renameFolder, renameTag } from '../data/actions.ts';
+import { deleteFolder, deleteTag, renameFolder, renameTag, setFolderCustomOrder } from '../data/actions.ts';
 import { addFiles, fromFileList } from '../data/addFiles.ts';
-import { useBookmarks, useFolders, useOpenRequestBookmarkIds, useTags } from '../data/queries.ts';
+import { useBookmarks, useFolders, useOpenRequestBookmarkIds, useTags, type ListOrder } from '../data/queries.ts';
 import { appSettings, useAppSettings } from '../data/settings.ts';
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -59,7 +60,13 @@ export function ListPage({ list: fixedList }: { list?: ListKey }) {
   // Narrow any list to one tag (?tag=…), e.g. a folder's "Don't understand yet" items.
   const [params, setParams] = useSearchParams();
   const filterTagId = params.get('tag');
-  const data = useBookmarks(list, sort, filterTagId);
+  // A folder in "My order" ignores the app-wide sort.
+  const order: ListOrder = folder?.customOrder ? 'custom' : sort;
+  const setOrder = (next: ListOrder) => {
+    if (folder && folder.customOrder !== (next === 'custom')) void setFolderCustomOrder(folder.id, next === 'custom');
+    if (next !== 'custom') appSettings.set({ sort: next });
+  };
+  const data = useBookmarks(list, order, filterTagId);
   const asked = useOpenRequestBookmarkIds();
   const items = data?.items;
   // Tags used in this list (on a tag's own page, the other tags), plus the active one.
@@ -127,7 +134,8 @@ export function ListPage({ list: fixedList }: { list?: ListKey }) {
         )}
         <label className="sort">
           <span className="visually-hidden">Sort by</span>
-          <select value={sort} onChange={(e) => appSettings.set({ sort: e.target.value as SortKey })}>
+          <select value={order} onChange={(e) => setOrder(e.target.value as ListOrder)}>
+            {folder && <option value="custom">My order</option>}
             {Object.entries(SORT_LABELS).map(([k, label]) => (
               <option key={k} value={k}>
                 {label}
@@ -153,9 +161,18 @@ export function ListPage({ list: fixedList }: { list?: ListKey }) {
         <p className="empty">{filterTagId ? 'Nothing in this list has that tag.' : EMPTY[list.kind]}</p>
       )}
       <div className="rows">
-        {items?.map((b, i) => (
-          <BookmarkRow key={b.id} bookmark={b} selected={i === selected} showFolder={list.kind !== 'folder'} hasOpenRequest={asked.has(b.id)} />
-        ))}
+        {items && order === 'custom' ? (
+          <SortableRows
+            items={items}
+            row={(b, dragHandle) => (
+              <BookmarkRow bookmark={b} selected={b === items[selected]} showFolder={false} hasOpenRequest={asked.has(b.id)} dragHandle={dragHandle} />
+            )}
+          />
+        ) : (
+          items?.map((b, i) => (
+            <BookmarkRow key={b.id} bookmark={b} selected={i === selected} showFolder={list.kind !== 'folder'} hasOpenRequest={asked.has(b.id)} />
+          ))
+        )}
       </div>
     </section>
   );

@@ -75,7 +75,7 @@ const send: { [T in OutboxOp['type']]: Sender<T> } = {
     await db.folders.put(await api<Folder>('POST', '/api/folders', { id: op.id, name: op.name }));
   },
   'folder.update': async (op) => {
-    await db.folders.put(await api<Folder>('PATCH', `/api/folders/${op.id}`, { name: op.name }));
+    await db.folders.put(await api<Folder>('PATCH', `/api/folders/${op.id}`, op.patch ?? { name: op.name }));
   },
   'folder.delete': async (op) => api('DELETE', `/api/folders/${op.id}`),
   // The server answers with the tag it kept: an existing one if another device already made one with this name.

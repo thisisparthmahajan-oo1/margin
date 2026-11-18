@@ -17,6 +17,7 @@ import {
   type SyncResponse,
   type TextQuoteAnchor,
   type UpdateBookmarkRequest,
+  type UpdateFolderRequest,
   type VideoRef,
 } from '@margin/shared';
 import {
@@ -127,7 +128,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
     const t = now();
     const existing = await c.bookmarks.findOneAndUpdate(
       { canonicalUrl },
-      { $set: { savedAt: t, archivedAt: null, folderId: null, updatedAt: t } },
+      { $set: { savedAt: t, archivedAt: null, folderId: null, folderPosition: null, updatedAt: t } },
       { returnDocument: 'after', projection: CLIENT_PROJECTION },
     );
     return existing ? toBookmark(existing as BookmarkDoc) : null;
@@ -136,6 +137,12 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
   const findByCanonicalUrl = async (canonicalUrl: string) => {
     const doc = await c.bookmarks.findOne({ canonicalUrl }, { projection: CLIENT_PROJECTION });
     return doc ? toBookmark(doc as BookmarkDoc) : null;
+  };
+
+  /** Where an item entering a folder goes: the bottom of the folder's own order. */
+  const bottomOf = async (folderId: string) => {
+    const last = await c.bookmarks.find({ folderId }, { projection: { folderPosition: 1 } }).sort({ folderPosition: -1 }).limit(1).next();
+    return Math.floor(last?.folderPosition ?? -1) + 1;
   };
 
   const getBookmark = async (id: string) => {
@@ -197,6 +204,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         relevance: null,
         relevanceAt: null,
         folderId: input.folderId ?? null,
+        folderPosition: input.folderId ? await bottomOf(input.folderId) : null,
         likedAt: null,
         archivedAt: null,
         progress: 0,
@@ -243,7 +251,12 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       const set: Partial<BookmarkDoc> = { updatedAt: t };
       if (patch.liked !== undefined) set.likedAt = patch.liked ? (current.likedAt ?? t) : null;
       if (patch.archived !== undefined) set.archivedAt = patch.archived ? (current.archivedAt ?? t) : null;
-      if (patch.folderId !== undefined) set.folderId = patch.folderId;
+      if (patch.folderId !== undefined && patch.folderId !== current.folderId) {
+        set.folderId = patch.folderId;
+        set.folderPosition = patch.folderId ? await bottomOf(patch.folderId) : null;
+      }
+      // A move within the folder. Ignored outside one, where it would mean nothing.
+      if (patch.folderPosition !== undefined && (set.folderId ?? current.folderId)) set.folderPosition = patch.folderPosition;
       if (patch.relevance !== undefined) {
         set.relevance = patch.relevance;
         set.relevanceAt = t;
@@ -336,6 +349,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         _id: input.id ?? randomUUID(),
         name: input.name,
         position: (last?.position ?? -1) + 1,
+        customOrder: false,
         createdAt: t,
         updatedAt: t,
       };
@@ -343,10 +357,11 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       return toFolder(doc);
     },
 
-    async updateFolder(id: string, patch: { name?: string; position?: number }): Promise<Folder | null> {
+    async updateFolder(id: string, patch: UpdateFolderRequest): Promise<Folder | null> {
       const set: Partial<FolderDoc> = { updatedAt: now() };
       if (patch.name !== undefined) set.name = patch.name;
       if (patch.position !== undefined) set.position = patch.position;
+      if (patch.customOrder !== undefined) set.customOrder = patch.customOrder;
       const doc = await c.folders.findOneAndUpdate({ _id: id }, { $set: set }, { returnDocument: 'after' });
       return doc ? toFolder(doc) : null;
     },
@@ -355,7 +370,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
     async deleteFolder(id: string): Promise<boolean> {
       const { deletedCount } = await c.folders.deleteOne({ _id: id });
       if (!deletedCount) return false;
-      await c.bookmarks.updateMany({ folderId: id }, { $set: { folderId: null, updatedAt: now() } });
+      await c.bookmarks.updateMany({ folderId: id }, { $set: { folderId: null, folderPosition: null, updatedAt: now() } });
       await recordDeletion('folder', id);
       return true;
     },

@@ -41,6 +41,7 @@ export function BookmarkRow({
   snippet,
   showFolder = true,
   hasOpenRequest = false,
+  dragHandle,
 }: {
   bookmark: Bookmark;
   selected?: boolean;
@@ -49,6 +50,8 @@ export function BookmarkRow({
   showFolder?: boolean;
   /** You asked the curator something about this article and haven't completed it. */
   hasOpenRequest?: boolean;
+  /** The grip for moving the row, in a folder in your own order. */
+  dragHandle?: ReactNode;
 }) {
   const answered = useRequest(b.suggestion?.requestId);
   const [moving, setMoving] = useState(false);
@@ -113,6 +116,7 @@ export function BookmarkRow({
         <div className="row-progress" style={{ transform: `scaleX(${b.progress})` }} aria-hidden />
       )}
       <div className="row-main">
+        {dragHandle}
         <div className="row-body">
           {canOpen(b) ? (
             <Link to={`/read/${b.id}`} className="row-link">

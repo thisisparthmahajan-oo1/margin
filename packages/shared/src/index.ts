@@ -67,6 +67,11 @@ export interface Bookmark {
   /** When `relevance` last changed, including being cleared. */
   relevanceAt: number | null;
   folderId: string | null;
+  /**
+   * Its place in its folder's own order ("My order"): ascending, fractional so a move changes only
+   * the moved item. Set by the server when the item enters a folder (at the bottom); null outside one.
+   */
+  folderPosition: number | null;
   likedAt: number | null;
   archivedAt: number | null;
   progress: number;
@@ -94,6 +99,8 @@ export interface Folder {
   id: string;
   name: string;
   position: number;
+  /** Lists its items in your own order (`Bookmark.folderPosition`) rather than the app-wide sort. */
+  customOrder: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -209,6 +216,10 @@ export const sortComparators: Record<SortKey, (a: Bookmark, b: Bookmark) => numb
   longest: (a, b) => b.wordCount - a.wordCount || b.savedAt - a.savedAt,
 };
 
+/** A folder in your own order: by `folderPosition`, items without one (not yet synced) last. */
+export const folderOrder = (a: Bookmark, b: Bookmark) =>
+  (a.folderPosition ?? Infinity) - (b.folderPosition ?? Infinity) || a.savedAt - b.savedAt;
+
 /** Server paths of stored article images, e.g. `/api/media/<hash>.png`. */
 export const MEDIA_PATH_PATTERN = /\/api\/media\/[\w.-]+/g;
 
@@ -289,6 +300,8 @@ export interface UpdateBookmarkRequest {
   liked?: boolean;
   archived?: boolean;
   folderId?: string | null;
+  /** A move within the item's folder ("My order"). Entering or leaving a folder sets it on its own. */
+  folderPosition?: number;
   progress?: number;
   /**
    * Tags are added and removed rather than replaced, so tagging an item on two devices at once
@@ -314,6 +327,7 @@ export interface CreateFolderRequest {
 export interface UpdateFolderRequest {
   name?: string;
   position?: number;
+  customOrder?: boolean;
 }
 
 export interface CreateTagRequest {

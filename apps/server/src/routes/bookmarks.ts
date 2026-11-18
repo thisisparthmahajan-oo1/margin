@@ -74,6 +74,9 @@ export const bookmarkRoutes = new Hono<AppEnv>()
     const patch = await c.req.json<UpdateBookmarkRequest>();
     const invalid = await invalidPlacement(store, patch.folderId, patch.addTagIds);
     if (invalid) return c.json({ error: invalid }, 400);
+    if (patch.folderPosition !== undefined && !Number.isFinite(patch.folderPosition)) {
+      return c.json({ error: 'folderPosition must be a number' }, 400);
+    }
     if (patch.relevance != null && !RELEVANCE_VALUES.includes(patch.relevance)) {
       return c.json({ error: `relevance must be ${RELEVANCE_VALUES.join(', ')} or null` }, 400);
     }

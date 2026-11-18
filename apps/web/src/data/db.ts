@@ -1,4 +1,4 @@
-import type { Bookmark, CuratorRequest, Folder, Highlight, RequestStatus, Tag, UpdateBookmarkRequest, TextQuoteAnchor } from '@margin/shared';
+import type { Bookmark, CuratorRequest, Folder, Highlight, RequestStatus, Tag, UpdateBookmarkRequest, UpdateFolderRequest, TextQuoteAnchor } from '@margin/shared';
 import Dexie, { type EntityTable } from 'dexie';
 
 /** A change made on this device that the server hasn't acknowledged yet. Flushed in `seq` order. */
@@ -11,7 +11,8 @@ export type OutboxOp =
   /** A file added on this device; its bytes wait in `files` under `key` until uploaded. */
   | { type: 'bookmark.upload'; id: string; key: string; name: string; bytes: number }
   | { type: 'folder.create'; id: string; name: string }
-  | { type: 'folder.update'; id: string; name: string }
+  /** `name` alone: queued by a version from before folder patches (a rename). */
+  | { type: 'folder.update'; id: string; patch?: UpdateFolderRequest; name?: string }
   | { type: 'folder.delete'; id: string }
   | { type: 'tag.create'; id: string; name: string }
   | { type: 'tag.update'; id: string; name: string }
@@ -134,3 +135,15 @@ db.version(7)
   );
 
 db.version(8).stores({ requests: 'id, bookmarkId, status, createdAt' });
+
+db.version(9)
+  .stores({})
+  .upgrade(async (tx) => {
+    // Positions in folders arrive from the server on the next sync; until then items sort last.
+    await tx.table<Bookmark>('bookmarks').toCollection().modify((b) => {
+      b.folderPosition ??= null;
+    });
+    await tx.table<Folder>('folders').toCollection().modify((f) => {
+      f.customOrder ??= false;
+    });
+  });

@@ -13,9 +13,13 @@ export const folderRoutes = new Hono<AppEnv>()
   })
   .patch('/:id', async (c) => {
     const body = await c.req.json<UpdateFolderRequest>();
+    if (body.customOrder !== undefined && typeof body.customOrder !== 'boolean') {
+      return c.json({ error: 'customOrder must be true or false' }, 400);
+    }
     const folder = await c.var.deps.store.updateFolder(c.req.param('id'), {
       name: body.name?.trim() || undefined,
       position: body.position,
+      customOrder: body.customOrder,
     });
     return folder ? c.json(folder) : c.json({ error: 'Not found' }, 404);
   })
