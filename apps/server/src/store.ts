@@ -139,10 +139,14 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
     return doc ? toBookmark(doc as BookmarkDoc) : null;
   };
 
-  /** Where an item entering a folder goes: the bottom of the folder's own order. */
-  const bottomOf = async (folderId: string) => {
-    const last = await c.bookmarks.find({ folderId }, { projection: { folderPosition: 1 } }).sort({ folderPosition: -1 }).limit(1).next();
-    return Math.floor(last?.folderPosition ?? -1) + 1;
+  /** Where an item entering a folder goes: the top of the folder's own order, as in Newest first. */
+  const topOf = async (folderId: string) => {
+    const first = await c.bookmarks
+      .find({ folderId, folderPosition: { $ne: null } }, { projection: { folderPosition: 1 } })
+      .sort({ folderPosition: 1 })
+      .limit(1)
+      .next();
+    return Math.ceil(first?.folderPosition ?? 1) - 1;
   };
 
   const getBookmark = async (id: string) => {
@@ -204,7 +208,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
         relevance: null,
         relevanceAt: null,
         folderId: input.folderId ?? null,
-        folderPosition: input.folderId ? await bottomOf(input.folderId) : null,
+        folderPosition: input.folderId ? await topOf(input.folderId) : null,
         likedAt: null,
         archivedAt: null,
         progress: 0,
@@ -253,7 +257,7 @@ export function createStore(c: Collections, media: Pick<MediaStore, 'remove'>, f
       if (patch.archived !== undefined) set.archivedAt = patch.archived ? (current.archivedAt ?? t) : null;
       if (patch.folderId !== undefined && patch.folderId !== current.folderId) {
         set.folderId = patch.folderId;
-        set.folderPosition = patch.folderId ? await bottomOf(patch.folderId) : null;
+        set.folderPosition = patch.folderId ? await topOf(patch.folderId) : null;
       }
       // A move within the folder. Ignored outside one, where it would mean nothing.
       if (patch.folderPosition !== undefined && (set.folderId ?? current.folderId)) set.folderPosition = patch.folderPosition;

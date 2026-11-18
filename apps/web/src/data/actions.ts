@@ -105,9 +105,9 @@ export async function savePdf(file: Blob, name: string): Promise<string | null> 
 
 export async function updateBookmark(id: string, patch: UpdateBookmarkRequest) {
   const now = Date.now();
-  // Entering a folder puts an item at the bottom of its own order (the server does the same and has the last word).
+  // Entering a folder puts an item at the top of its own order (the server does the same and has the last word).
   const current = patch.folderId !== undefined ? await db.bookmarks.get(id) : undefined;
-  const entering = patch.folderId && patch.folderId !== current?.folderId ? await bottomOf(patch.folderId) : null;
+  const entering = patch.folderId && patch.folderId !== current?.folderId ? await topOf(patch.folderId) : null;
   await commit(
     () =>
       db.bookmarks.update(id, (b) => {
@@ -140,9 +140,9 @@ export const toggleArchive = (b: Bookmark) => updateBookmark(b.id, { archived: b
 export const moveToFolder = (b: Bookmark, folderId: string | null) =>
   updateBookmark(b.id, { folderId, archived: false });
 
-const bottomOf = async (folderId: string) => {
-  const inFolder = await db.bookmarks.filter((b) => b.folderId === folderId).toArray();
-  return Math.floor(Math.max(-1, ...inFolder.map((b) => b.folderPosition ?? -1))) + 1;
+const topOf = async (folderId: string) => {
+  const placed = (await db.bookmarks.filter((b) => b.folderId === folderId).toArray()).flatMap((b) => b.folderPosition ?? []);
+  return Math.ceil(Math.min(1, ...placed)) - 1;
 };
 
 /** Where an item dropped between `before` and `after` goes in its folder's own order (either may be missing: top or bottom). */

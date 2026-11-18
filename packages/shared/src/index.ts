@@ -69,7 +69,7 @@ export interface Bookmark {
   folderId: string | null;
   /**
    * Its place in its folder's own order ("My order"): ascending, fractional so a move changes only
-   * the moved item. Set by the server when the item enters a folder (at the bottom); null outside one.
+   * the moved item. Set by the server when the item enters a folder (at the top, as in Newest first); null outside one.
    */
   folderPosition: number | null;
   likedAt: number | null;

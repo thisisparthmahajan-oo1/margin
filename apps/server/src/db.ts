@@ -97,12 +97,12 @@ export async function backfill(c: Collections) {
   await c.bookmarks.updateMany({ suggestion: { $exists: false } }, { $set: { suggestion: null } });
   await c.bookmarks.updateMany({ relevance: { $exists: false } }, { $set: { relevance: null, relevanceAt: null } });
   await c.bookmarks.updateMany({ audio: { $exists: false } }, { $set: { audio: null } });
-  // Folders' own order ("My order") starts as the order things were filed: oldest first.
+  // Folders' own order ("My order") starts as Newest first, the default sort.
   await c.folders.updateMany({ customOrder: { $exists: false } }, { $set: { customOrder: false } });
   await c.bookmarks.updateMany({ folderPosition: { $exists: false }, folderId: null }, { $set: { folderPosition: null } });
   const unplaced = c.bookmarks
     .find({ folderPosition: { $exists: false } }, { projection: { folderId: 1 } })
-    .sort({ savedAt: 1 });
+    .sort({ savedAt: -1 });
   const next = new Map<string, number>();
   for await (const doc of unplaced) {
     const position = next.get(doc.folderId!) ?? 0;

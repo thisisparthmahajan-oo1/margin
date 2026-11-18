@@ -21,18 +21,19 @@ const order = async (folderId: string) =>
   (await ctx.c.bookmarks.find({ folderId }).toArray()).map((d) => ({ ...d, id: d._id }) as unknown as Bookmark).sort(folderOrder).map((b) => b.url);
 
 describe('a folder in your own order', () => {
-  it('new arrivals join the bottom, whether saved into the folder or moved there', async () => {
+  it('new arrivals land on top (as in Newest first), whether saved into the folder or moved there', async () => {
     const q = await store().createFolder({ name: 'Depth queue' });
     expect(q.customOrder).toBe(false);
     const a = await save('https://a.com', q.id);
     const b = await save('https://b.com', q.id);
     const c = await save('https://c.com');
-    expect([a.folderPosition, b.folderPosition, c.folderPosition]).toEqual([0, 1, null]);
-
-    await store().updateBookmark(a.id, { folderPosition: 1.5 }); // dragged below b
+    expect([a.folderPosition, b.folderPosition, c.folderPosition]).toEqual([0, -1, null]);
     expect(await order(q.id)).toEqual(['https://b.com', 'https://a.com']);
+
+    await store().updateBookmark(b.id, { folderPosition: 0.5 }); // dragged below a
+    expect(await order(q.id)).toEqual(['https://a.com', 'https://b.com']);
     await store().updateBookmark(c.id, { folderId: q.id });
-    expect(await order(q.id)).toEqual(['https://b.com', 'https://a.com', 'https://c.com']);
+    expect(await order(q.id)).toEqual(['https://c.com', 'https://a.com', 'https://b.com']);
   });
 
   it('leaving a folder, or the folder going, clears the position; a move outside a folder is ignored', async () => {
@@ -42,7 +43,7 @@ describe('a folder in your own order', () => {
     expect((await store().updateBookmark(a.id, { folderId: null }))!.folderPosition).toBeNull();
     expect((await store().updateBookmark(a.id, { folderPosition: 3 }))!.folderPosition).toBeNull();
     // Staying in the same folder keeps the place.
-    expect((await store().updateBookmark(b.id, { folderId: q.id }))!.folderPosition).toBe(1);
+    expect((await store().updateBookmark(b.id, { folderId: q.id }))!.folderPosition).toBe(-1);
     await store().deleteFolder(q.id);
     expect((await store().getBookmark(b.id))!).toMatchObject({ folderId: null, folderPosition: null });
   });
@@ -58,15 +59,15 @@ describe('a folder in your own order', () => {
     expect(sync.folders.find((f) => f.id === q.id)!.customOrder).toBe(true);
   });
 
-  it('items filed before this existed get positions in the order they were saved', async () => {
+  it('items filed before this existed start Newest first', async () => {
     const q = await store().createFolder({ name: 'Old folder' });
     const [a, b, c] = [await save('https://a.com', q.id), await save('https://b.com', q.id), await save('https://c.com')];
     await ctx.c.bookmarks.updateMany({}, { $unset: { folderPosition: '' } });
     await ctx.c.folders.updateMany({}, { $unset: { customOrder: '' } });
     await ctx.c.bookmarks.updateOne({ _id: a.id }, { $set: { savedAt: b.savedAt + 1 } }); // a saved after b
     await backfill(ctx.c);
-    expect((await store().getBookmark(b.id))!.folderPosition).toBe(0);
-    expect((await store().getBookmark(a.id))!.folderPosition).toBe(1);
+    expect((await store().getBookmark(a.id))!.folderPosition).toBe(0);
+    expect((await store().getBookmark(b.id))!.folderPosition).toBe(1);
     expect((await store().getBookmark(c.id))!.folderPosition).toBeNull();
     expect((await store().getFolder(q.id))!.customOrder).toBe(false);
   });

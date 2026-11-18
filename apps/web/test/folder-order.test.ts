@@ -27,17 +27,17 @@ describe('a folder in your own order, on the device', () => {
     expect(positionBetween(null, null)).toBe(0);
   });
 
-  it('moving into a folder puts an item at the bottom, and dragging reorders it', async () => {
+  it('moving into a folder puts an item on top, and dragging reorders it', async () => {
     const q = await createFolder('Depth queue');
     const [a, b, c] = [await item('https://a.com/'), await item('https://b.com/'), await item('https://c.com/')];
     for (const x of [a, b, c]) await moveToFolder(await fresh(x), q);
-    expect(await queue(q)).toEqual(['https://a.com/', 'https://b.com/', 'https://c.com/']);
+    expect(await queue(q)).toEqual(['https://c.com/', 'https://b.com/', 'https://a.com/']); // positions -2, -1, 0
 
-    await reorderInFolder(await fresh(c), null, await fresh(a)); // c to the top
-    await reorderInFolder(await fresh(a), await fresh(b), null); // a to the bottom
-    expect(await queue(q)).toEqual(['https://c.com/', 'https://b.com/', 'https://a.com/']);
+    await reorderInFolder(await fresh(a), null, await fresh(c)); // a to the top
+    await reorderInFolder(await fresh(c), await fresh(b), null); // c to the bottom
+    expect(await queue(q)).toEqual(['https://a.com/', 'https://b.com/', 'https://c.com/']);
     const patches = (await db.outbox.toArray()).flatMap((e) => (e.op.type === 'bookmark.update' && e.op.patch.folderPosition !== undefined ? [e.op.patch] : []));
-    expect(patches).toEqual([{ folderPosition: -1 }, { folderPosition: 2 }]);
+    expect(patches).toEqual([{ folderPosition: -3 }, { folderPosition: 0 }]);
 
     await moveToFolder(await fresh(a), null);
     expect(await fresh(a)).toMatchObject({ folderId: null, folderPosition: null });
